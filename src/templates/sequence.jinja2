@@ -1,0 +1,92 @@
+{% extends "includes/base.jinja2" %}
+{% block title %}{% endblock %}
+{% block head %}
+{{ super() }}
+<script type="text/javascript">
+    $(document).ready(function () {
+        // Existing logic for when the document is ready can be placed here (if needed)
+
+        // New logic for processing the sequence
+        const sequence = "{{ sequence }}";  // The raw sequence passed from the backend
+        const container = document.getElementById('sequence-container');
+
+        let coloredSequence = '';
+        let lastChar = '';
+        let currentGroup = '';
+
+        // Iterate through the sequence and group consecutive same letters
+        for (let i = 0; i < sequence.length; i++) {
+            const char = sequence[i];
+
+            if (char === lastChar) {
+                currentGroup += char;
+            } else {
+                if (currentGroup) {
+                    coloredSequence += `<span class="${lastChar}">${currentGroup}</span>`;
+                }
+                currentGroup = char;
+                lastChar = char;
+            }
+        }
+
+        // Add the last group
+        if (currentGroup) {
+            coloredSequence += `<span class="${lastChar}">${currentGroup}</span>`;
+        }
+
+        // Set the colored sequence as HTML inside the container
+        container.innerHTML = coloredSequence;
+    }); // end Document Ready
+</script>
+<style>
+    #search-title {
+        position: absolute;
+        top: 220px;
+        z-index: 10;
+    }
+    #search-title h1 {
+        color: white !important;
+        font-size: 50px !important;
+    }
+    .carousel {
+        height: 600px !important;
+    }
+    .carousel img {
+        height: 600px !important;
+        object-fit: cover;
+    }
+    .carousel-indicators {
+        padding: 0px !important;
+    }
+    .carousel-item {
+        height: 600px !important;
+    }
+    .carousel-inner img {
+        margin: auto;
+        filter: brightness(.7);
+    }
+    .A { color: red; }
+    .T { color: blue; }
+    .C { color: green; }
+    .G { color: orange; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div id="search-carousel" class="carousel slide" data-ride="carousel">
+    <div id="search-title" class="container-fluid">
+        <div class="row justify-content-center">
+            <h1>Sequence</h1>
+        </div>
+    </div>
+    <div class="carousel-inner">
+        <div class="carousel-item active">
+            <img class="d-block w-100" src="/static/img/banner_beetle.png" alt="">
+        </div>
+    </div>
+</div>
+
+
+{% include "wp-templates/sequence.html" %}
+
+{% endblock %}

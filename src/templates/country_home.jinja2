@@ -1,0 +1,149 @@
+{% extends "includes/base.jinja2" %}
+{% block title %} - Country Home{% endblock %}
+{% block head %}
+{{ super() }}
+<script type="text/javascript">
+    let mapData = {}
+    let mapLookup = {}
+
+    async function fetchCountsData(country, countryIso) {
+        data = {records: 0}
+        resp = await fetch(`/api/counts?query=geo:country/ocean:${country}`)
+
+        if (resp.ok) data = await resp.json()
+        return data
+    }
+
+    function refreshMap() {
+        // Remove existing object if there is any
+        try {
+            let mapObject = $("#world-map").vectorMap("get", "mapObject")
+            mapObject.remove()
+        } catch (error) {
+            // TODO: Handle error when mapObject doesn't exist yet
+            //console.log(error)
+        }
+
+        // Generate world map
+        $("#world-map").vectorMap({
+            backgroundColor: "transparent",
+            regionStyle: {
+                initial: {
+                    fill: "#e4e4e4",
+                    "stroke-opacity": 0
+                }
+            },
+            series: {
+                regions: [{
+                    values: mapData,
+                    scale: ["#a9d7cd", "#076a56"],
+                    normalizeFunction: "polynomial",
+                }]
+            },
+            onRegionTipShow: function(e, el, code) {
+                // Show number of records per country if loaded
+                if (code in mapData) {
+                    el.html(el.html() + ` (${mapData[code].toLocaleString()} records)`)
+                } else {
+                    el.html(el.html() + ' (loading...)')
+                }
+            },
+            onRegionClick: function(e, code) {
+                if (code in mapLookup) {
+                    window.location = `/geo/${mapLookup[code]}`
+                }
+            }
+        })
+
+        // Remove loading spinner
+        $("#world-map-div").removeClass("sk-loading")
+
+        // Remove loading spinner when all countries loaded
+        //if (Object.keys(mapData).length == Object.keys(countryLookup).length) {
+        //    $("#world-map-div").removeClass("sk-loading")
+        //}
+    }
+
+    $(document).ready(async function () {
+        // Fetch counts data for each country asynchronously and refresh map afterwards
+        // TODO: Deal with possible race condition on teardown and generation of map
+        Object.entries(countryLookup).map(async ([country, countryIso]) => {
+            mapLookup[countryIso] = country
+
+            let data = await fetchCountsData(country, countryIso)
+            mapData[countryIso] = data.records
+            refreshMap()
+        })
+    }); //end Document Ready
+</script>
+<style>
+    #search-title {
+        position: absolute;
+        top: 220px;
+        z-index: 10;
+    }
+    #search-title h1 {
+        font-size: 50px !important;
+        color: white !important;
+    }
+    .carousel {
+        height: 600px !important;
+    }
+    .carousel img {
+        height: 600px !important;
+        object-fit: cover;
+    }
+    .carousel-indicators {
+        padding: 0px !important;
+    }
+    .carousel-item {
+        height: 600px !important;
+    }
+    .carousel-inner img {
+        margin: auto;
+        filter: brightness(.7);
+    }
+</style>
+{% endblock %}
+{% block content %}
+<div id="search-carousel" class="carousel slide" data-ride="carousel">
+    <div id="search-title" class="container-fluid">
+        <div class="row justify-content-center">
+            <h1>Countries</h1>
+        </div>
+    </div>
+    <div class="carousel-inner">
+        <div class="carousel-item active">
+            <img class="d-block w-100" src="/static/img/banner_fish.png" alt="">
+        </div>
+    </div>
+</div>
+
+{% include "wp-templates/country_home.html" %}
+
+<section id="features" class="container services">
+    <div class="row">
+        <div class="col-lg-12">
+            <div class="ibox">
+                <div class="ibox-content">
+                    <h3 class="text-center">Heatmap of Records by Country</h3>
+                </div>
+                <div id="world-map-div" class="ibox-content sk-loading">
+                    <div class="sk-spinner sk-spinner-cube-grid">
+                        <div class="sk-cube"></div>
+                        <div class="sk-cube"></div>
+                        <div class="sk-cube"></div>
+                        <div class="sk-cube"></div>
+                        <div class="sk-cube"></div>
+                        <div class="sk-cube"></div>
+                        <div class="sk-cube"></div>
+                        <div class="sk-cube"></div>
+                        <div class="sk-cube"></div>
+                    </div>
+                    <div id="world-map" style="height: 600px;"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+{% endblock %}

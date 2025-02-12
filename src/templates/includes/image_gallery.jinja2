@@ -1,0 +1,256 @@
+<script type="text/javascript">
+    function populate_image_gallery(max_images=-1, assorted_subtaxa=false) {
+        fetch(`/api/images/{{ query_id }}?max_images=${max_images}&assorted_subtaxa=${assorted_subtaxa}`)
+            .then(response => {
+                $("#ajax-urls").append(response.url + "\n")
+                if (!response.ok) {
+                    throw new Error(`Request failed with status ${response.status}`)
+                }
+                return response.json()
+            })
+            .then(image_obj => {
+                $("#images").empty()
+                let $divSliderFor = $("<div>")
+                    .addClass("slick-slider-for")
+                let $divSliderNav = $("<div>")
+                    .addClass("slick-slider-nav")
+
+                // Manually add slider buttons + triggers
+                let $divSliderNavButtons = $("<div>")
+                    .addClass("slick-navigation-buttons")
+                let $divSliderNavNext = $("<button>", {
+                    id:"slick-nav-next",
+                    type: "button",
+                    class: "btn btn-primary",
+                    text: ">"
+                })
+                let $divSliderNavPrev = $("<button>", {
+                    id:"slick-nav-prev",
+                    type: "button",
+                    class: "btn btn-primary",
+                    text: "<"
+                })
+                $divSliderNavNext.click(() => {$(".slick-slider-nav").slick("slickNext")})
+                $divSliderNavPrev.click(() => {$(".slick-slider-nav").slick("slickPrev")})
+                $divSliderNavButtons.append($divSliderNavPrev)
+                $divSliderNavButtons.append($divSliderNavNext)
+
+                // Disable buttons if one or less images
+                let totalImageCount = Object.values(image_obj["images"]).reduce((total, arr) => total + arr.length, 0)
+                if (totalImageCount <= 1) {
+                    $divSliderNavNext.attr("disabled", true)
+                    $divSliderNavPrev.attr("disabled", true)
+                }
+
+                $("#images").append($divSliderNavButtons)
+                $("#images").append($divSliderFor)
+                $("#images").append($divSliderNav)
+                for (const [orientation, images] of Object.entries(image_obj["images"]).sort()) {
+                    for (const image of images) {
+                        let image_url = image["image_url"]
+                        let thumbnail_url = image["thumbnail_url"]
+                        let object_id = image["object_id"]
+                        let processid = image["processid"]
+                        let taxon = image["taxon"]
+                        let copyright = image["copyright"]
+
+                        let $divView = $("<div>")
+                        let $imgView = $("<img>")
+                            .attr("src", image_url)
+                            .css("width", "100%")
+                            .css("max-height", "434px")
+                            .css("object-fit", "cover")
+                        $("#ajax-urls").append($imgView.prop("src") + "\n")
+
+                        let $divSliderDetailsBtn = $("<button>", {
+                          type: "button",
+                          class: "btn btn-primary btn-details",
+                          "data-toggle": "modal",
+                          "data-target": `#modal-${processid}`,
+                          text: "See details +"
+                        })
+
+                        // Create modal
+                        let $modalView = $("<div>", {
+                            id: `modal-${processid}`,
+                            class: "modal inmodal fade",
+                            tabindex: "-1",
+                            role: "dialog",
+                            style: "display: none;",
+                            "aria-hidden": "true"
+                        })
+                        let $modalDialog = $("<div>", {class: "modal-dialog"})
+                        let $modalContent = $("<div>", {
+                            class: "modal-content",
+                        })
+
+                        let $modalBodyView = $("<div>", {
+                            class: "modal-body"
+                        }).html(`<table class="table">
+                                    <tr>
+                                        <th colspan="2"><a class="navy-link" href="/record/${processid}">${processid}</a></th>
+                                    </tr>
+                                    <tr>
+                                        <th>Taxon:</th>
+                                        <td>${taxon}</td>
+                                    </tr>
+                                    <tr>
+                                        <th>License:</th>
+                                        <td>${copyright["license"]}</td>
+                                    </tr>
+                                    <tr>
+                                        <th>License Holder:</th>
+                                        <td>${copyright["holder"]}</td>
+                                    </tr>
+                                    <tr>
+                                        <th>License Year:</th>
+                                        <td>${copyright["year"]}</td>
+                                    </tr>`)
+
+                        let $modalFooterView = $("<div>", {
+                            class: "modal-footer"
+                        })
+                        let $modalFooterButton = $("<button>", {
+                            type: "button",
+                            class: "btn btn-white",
+                            "data-dismiss": "modal",
+                            text: "Close"
+                        })
+
+                        // Build modal
+                        $modalContent.append($modalBodyView)
+                        $modalContent.append($modalFooterView)
+                        $modalFooterView.append($modalFooterButton)
+
+                        $modalDialog.append($modalContent)
+                        $modalView.append($modalDialog)
+
+                        // Build views
+                        $("body").append($modalView)
+                        // $divView.append($modalView)
+                        $divView.append($imgView)
+                        $divView.append($divSliderDetailsBtn)
+                        // $divView.append($tableView)
+
+                        let $divThumbnail = $("<div>")
+                        let $imgThumbnail = $("<img>")
+                            .attr("src", thumbnail_url)
+                            .css("height", "125px")
+                        $("#ajax-urls").append($imgThumbnail.prop("src") + "\n")
+                        $divThumbnail.append($imgThumbnail)
+
+                        $divSliderFor.append($divView)
+                        $divSliderNav.append($divThumbnail)
+                    }
+                }
+                $(".slick-slider-for").slick({
+                    dots: false,
+                    infinite: true,
+                    slidesToShow: 1,
+                    slidesToScroll: 1,
+                    adaptiveHeight: true,
+                    arrows: false,
+                    fade: true,
+                    asNavFor: ".slick-slider-nav"
+                })
+                $(".slick-slider-nav").slick({
+                    dots: false,
+                    infinite: false,
+                    nextArrow: '<button type="button" class="btn btn-primary">&gt;</button>',
+                    prevArrow: '<button type="button" class="btn btn-primary">&lt;</button>',
+                    appendArrows: $(".slick-navigation-buttons"),
+                    arrows: false,
+                    slidesToShow: 1,
+                    slidesToScroll: 1,
+                    asNavFor: ".slick-slider-for",
+                    centerMode: true,
+                    variableWidth: true,
+                    focusOnSelect: true
+                })
+                $("#slick-nav-prev").prop("disabled", true)
+                $(".slick-slider-nav").on("afterChange", (e, slick) => {
+                    if (slick.currentSlide == 0) {
+                        $("#slick-nav-prev").prop("disabled", true)
+                    } else {
+                        $("#slick-nav-prev").prop("disabled", false)
+                    }
+
+                    if (slick.currentSlide >= slick.slideCount - slick.options.slidesToShow) {
+                        $("#slick-nav-next").prop("disabled", true)
+                    } else {
+                        $("#slick-nav-next").prop("disabled", false)
+                    }
+                })
+                $(".slick-slider-for .slick-slide.slick-current.slick-active img").on("load", (e) => {
+                    let img = e.target
+                    let height = Math.min($(img).height(), 434)
+                    $(img).siblings().each(function() {
+                        height = height + $(this).outerHeight(true)
+                    })
+                    $(".slick-slider-for .slick-list").animate({
+                        height: height
+                    }, 500)
+                })
+                $("#images-div").toggleClass("sk-loading")
+            })
+    }
+</script>
+
+<style>
+    #images {
+        min-height: 614.4px;
+    }
+    .slick-navigation-buttons {
+        display: inline-flex;
+        flex-direction: row;
+        position: relative;
+        gap: 10px;
+        z-index: 1;
+        top: 365px;
+        margin-left: 20px;
+    }
+    .slick-slider-for {
+        margin-top: -35px;
+    }
+    .slick-slider-nav, .slick-slider-for {
+        margin-bottom: 0px !important;
+    }
+    .slick-slider-nav .slick-slide {
+        margin-right: 10px;
+    }
+    .slick-slider-nav .slick-current {
+        border: solid 5px #1FC2A0;
+    }
+    .image-info td, .image-info th {
+        background-color: #fff;
+    }
+    .btn-details {
+        position: relative;
+        float: right;
+        bottom: 52px;
+        margin-top: -20px;
+        margin-right: 20px;
+    }
+    button.slick-arrow {
+        display: inline;
+    }
+</style>
+
+<div class="ibox">
+    <div id="images-div" class="ibox-content sk-loading">
+        <div class="navy-line{{ "-center" if image_gallery_title_center else "" }}"></div>
+        <h1 {{ "class=text-center" if image_gallery_title_center else "" }}>{{ image_gallery_title|e if image_gallery_title else "Specimen Images" }}</h1>
+        <div class="sk-spinner sk-spinner-cube-grid">
+            <div class="sk-cube"></div>
+            <div class="sk-cube"></div>
+            <div class="sk-cube"></div>
+            <div class="sk-cube"></div>
+            <div class="sk-cube"></div>
+            <div class="sk-cube"></div>
+            <div class="sk-cube"></div>
+            <div class="sk-cube"></div>
+            <div class="sk-cube"></div>
+        </div>
+        <div id="images"><br><br></div>
+    </div>
+</div>

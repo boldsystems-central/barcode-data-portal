@@ -1,0 +1,55 @@
+{% extends "includes/base.jinja2" %}
+{% block title %}{% endblock %}
+{% block head %}
+{{ super() }}
+<script type="text/javascript">
+    $(document).ready(async function () {
+    }); //end Document Ready
+</script>
+<style>
+    #search-title {
+        position: absolute;
+        top: 220px;
+        z-index: 10;
+    }
+    #search-title h1 {
+        color: white !important;
+        font-size: 50px !important;
+    }
+    .carousel {
+        height: 600px !important;
+    }
+    .carousel img {
+        height: 600px !important;
+        object-fit: cover;
+    }
+    .carousel-indicators {
+        padding: 0px !important;
+    }
+    .carousel-item {
+        height: 600px !important;
+    }
+    .carousel-inner img {
+        margin: auto;
+        filter: brightness(.7);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div id="search-carousel" class="carousel slide" data-ride="carousel">
+    <div id="search-title" class="container-fluid">
+        <div class="row justify-content-center">
+            <h1>API</h1>
+        </div>
+    </div>
+    <div class="carousel-inner">
+        <div class="carousel-item active">
+            <img class="d-block w-100" src="/static/img/banner_beetle.png" alt="">
+        </div>
+    </div>
+</div>
+
+{% include "wp-templates/api.html" %}
+
+{% endblock %}

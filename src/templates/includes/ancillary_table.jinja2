@@ -1,0 +1,157 @@
+<script type="text/javascript">
+    function process_fasta_data(row_data) {
+        fasta_string = ''
+        // loops through sequences and creates the data to download
+        if (row_data.length) {
+            for (var i = 0; i < row_data.length; i++) {
+                fasta_string += '>'
+                fasta_string += [
+                    row_data[i].name,
+                    row_data[i].marker_code,
+                    row_data[i].direction,
+                    row_data[i].submitter
+                ].join("|").replaceAll(" ", "_") + "\n"
+                fasta_string += row_data[i].seq + "\n"
+            }
+        }
+        else {
+            swal({
+                title: "No Primers Selected",
+                text: "Please select primers in the datatable to enable download.",
+                type: "warning"
+            });
+        }
+        return fasta_string
+    }
+
+    function download_fasta(fasta_string) {
+        var data = new Blob([fasta_string], { type: 'text/plain' });
+        var bloburl = window.URL.createObjectURL(data);
+
+        const a = document.createElement('a');
+        a.setAttribute('href', bloburl)
+        a.setAttribute('download', 'primer_sequences.fasta')
+        a.style.display = 'none'
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a)
+        window.URL.revokeObjectURL(bloburl);
+    }
+
+    function populate_ancillary_table(collection, fields, minRecords, dataSrc, order, columns, columnDefs, invoker) {
+        DataTable.Buttons.defaults.dom.button.className = 'btn'
+        // will render the FASTA download button only for the primer datatable
+        if (invoker == 'primer_home') {
+            dt_layout = {
+                topStart: {
+                    buttons: [
+                        {
+                            className: "btn-lg btn-primary",
+                            text: '<a href="#" style="color:white"><i class="fa fa-download"></i> FASTA</a>',
+                            action: function (e, dt, node, config) {
+                                fasta_string = process_fasta_data(ancillaryTable.rows({ selected: true }).data().toArray())
+                                if (fasta_string.length) download_fasta(fasta_string)
+                            }
+                        }
+                    ]
+                },
+                top2Start: function () {
+                    let title = document.createElement("div");
+
+                    let navy_line = document.createElement("div");
+                    navy_line.classList = "navy-line";
+                    let h1 = document.createElement("h1");
+                    h1.innerText = "{{ ancillary_title|e if ancillary_title else 'Registry' }}";
+
+                    title.appendChild(navy_line);
+                    title.appendChild(h1);
+
+                    return title;
+                },
+                bottomStart: ["info", "pageLength"],
+                bottom2Start: function () {
+                    let message = document.createElement("div");
+                    message.innerHTML = "<strong>Note:</strong> Selecting all will select all visible primers on the page";
+
+                    return message;
+                }
+            }
+            select = {
+                style: 'multi',
+                selector: 'td:first-child',
+                headerCheckbox: 'select-page'
+            }
+        }
+        else {
+            dt_layout = {
+                topStart: null,
+                top2Start: function () {
+                    let title = document.createElement("div");
+
+                    let navy_line = document.createElement("div");
+                    navy_line.classList = "navy-line";
+                    let h1 = document.createElement("h1");
+                    h1.innerText = "{{ ancillary_title|e if ancillary_title else 'Registry' }}";
+
+                    title.appendChild(navy_line);
+                    title.appendChild(h1);
+
+                    return title;
+                },
+                bottomStart: ["info", "pageLength"]
+            }
+            select = false
+        }
+        const ancillaryTable = $("#ancillaryTable").DataTable({
+            layout: dt_layout,
+            scrollX: true,
+            paging: true,
+            pageLength: 25,
+            searching: true,
+            ordering: true,
+            order: order,
+            select: select,
+            ajax: {
+                url: `/api/ancillary-set?collection=${collection}&fields=${fields}&min_records=${minRecords}`,
+                dataSrc: dataSrc,
+            },
+            columns: columns,
+            columnDefs: columnDefs,
+        })
+
+        let url_params = ancillaryTable.ajax.params()
+        $("#ajax-urls").append(location.protocol + '//' + location.host + ancillaryTable.ajax.url() + `?collection=${url_params.collection}&fields=${url_params.fields}` + "\n")
+        $("#ancillary-div").toggleClass("sk-loading")
+    }
+</script>
+
+<style>
+    .dataTable thead tr {
+        background-color: #a9d7cd;
+    }
+
+    .dataTable td.highlight {
+        background-color: whitesmoke !important;
+    }
+
+    :root {
+        --dt-row-selected: 4, 156, 123;
+    }
+</style>
+
+<div class="ibox">
+    <div id="ancillary-div" class="ibox-content sk-loading">
+        <div class="sk-spinner sk-spinner-cube-grid">
+            <div class="sk-cube"></div>
+            <div class="sk-cube"></div>
+            <div class="sk-cube"></div>
+            <div class="sk-cube"></div>
+            <div class="sk-cube"></div>
+            <div class="sk-cube"></div>
+            <div class="sk-cube"></div>
+            <div class="sk-cube"></div>
+            <div class="sk-cube"></div>
+        </div>
+        <table id="ancillaryTable" class="row-border hover stripe" style="width:100%"></table>
+    </div>
+</div>

@@ -1,0 +1,358 @@
+<script type="text/javascript">
+    // TODO: change from hardcode to a separate mapping file
+    const searchTermScopes = [
+        "tax",
+        "geo",
+        "inst",
+        "ids",
+        "bin",
+        "recordsetcode",
+    ]
+    var searchTerms = new Set();
+
+    async function clearQueryString() {
+        $("input#query").val("");
+    }
+
+    async function focusOnQueryInput() {
+        $("input#query").focus();
+    }
+
+    async function showDropdownMenu() {
+        $(".dropdown-menu").show();
+    }
+
+    async function hideDropdownMenu() {
+        $(".dropdown-menu").hide();
+    }
+
+    async function showDropdownSpinner() {
+        $("#dropdown-spinner").removeClass("d-none");
+    }
+
+    async function hideDropdownSpinner() {
+        $("#dropdown-spinner").addClass("d-none");
+    }
+
+    async function showDropdownError(msg) {
+        $("#dropdown-error-msg").text(msg);
+        $("#dropdown-error").removeClass("d-none");
+    }
+
+    async function hideDropdownError() {
+        $("#dropdown-error-msg").text("");
+        $("#dropdown-error").addClass("d-none");
+    }
+
+    async function addAutocompleteItems(scopeTermString) {
+        await hideDropdownError();
+        await clearDropdownItems();
+        showDropdownSpinner();
+
+        resp = await fetch("/api/terms?partial_term=" + scopeTermString);
+
+        // Error message to dropdown if failed response
+        if (!resp.ok) {
+            hideDropdownSpinner();
+            showDropdownError("Failed fetching terms");
+            return false;
+        }
+
+        data = await resp.json();
+
+        // Update dropdown
+        if (data.length) {
+            hideDropdownSpinner();
+            await clearDropdownItems();
+            await addDropdownItems(data);
+            return true;
+        } else {
+            hideDropdownMenu();
+        }
+
+        return false;
+    }
+
+    async function addDropdownItems(items, direct = false) {
+        items.forEach(item => {
+            if (item.original_term.includes(" ")) {
+                searchTerm = `"${item.original_term}"[${item.scope}]`
+            } else {
+                searchTerm = `${item.original_term}[${item.scope}]`
+            }
+            $(".dropdown-menu").append($("<a>", {
+                "class": "dropdown-item",
+                "onclick": "addConfirmedSearchTerm(this);",
+                //"onclick": item.scope == "ids" ? "enterDirectSearchTerm(this);" : "addConfirmedSearchTerm(this);",
+                text: searchTerm
+            }));
+        });
+    }
+
+    async function clearDropdownItems() {
+        $(".dropdown-item").not(".dropdown-special").remove();
+    }
+
+    async function removeConfirmedSearchTerm(element) {
+        searchTerm = element.parentNode.childNodes[0].textContent.trim();
+        searchTerms.delete(searchTerm)
+        element.parentNode.remove();
+    }
+
+    async function addConfirmedSearchTerm(element) {
+        currentSearchTerm = element.innerHTML.trim()
+
+        // If current search term has already been selected, just clear and close dropdown
+        if (searchTerms.has(currentSearchTerm)) {
+            hideDropdownMenu();
+            clearDropdownItems();
+            clearQueryString();
+            focusOnQueryInput();
+            return;
+        }
+
+        // Add new search term
+        searchTerms.add(currentSearchTerm)
+        $("#search-terms").append($("<span/>", {
+            "class": "badge badge-pill",
+            "style": "color: white; font-size: 15px",
+            text: currentSearchTerm + " "
+        }).append($("<a/>", {
+            "style": "color: red",
+            "onclick": "removeConfirmedSearchTerm(this);",
+            text: "X"
+        })))
+
+        $("#search-terms").scrollTop($("#search-terms")[0].scrollHeight);
+
+        hideDropdownMenu();
+        clearDropdownItems();
+        clearQueryString();
+        focusOnQueryInput();
+    }
+
+    async function enterDirectSearchTerm(element) {
+        currentSearchTerm = element.innerHTML.trim()
+
+        // Fix to trim up until square bracket scope
+        currentSearchTerm = currentSearchTerm.slice(0, currentSearchTerm.indexOf("["))
+        window.location.href = "/record/" + currentSearchTerm;
+    }
+
+    async function checkAutocomplete(query) {
+        // Check if scope is mentioned
+        querySplit = query.split(":", 2);
+
+        if (querySplit.length > 1) {
+            let scope = querySplit[0].toLowerCase();
+            if (!searchTermScopes.includes(scope)) {
+                showDropdownSpinner();
+                showDropdownMenu();
+                await addAutocompleteItems(query);
+                return;
+            }
+
+            // Ignore if term is zero length
+            let term = querySplit[1].trim();
+            if (!term.length) {
+                hideDropdownError();
+                hideDropdownMenu();
+                return;
+            }
+
+            // Retrieve inner string if quoted. Exit early if empty quoted string
+            if (term.split('"').length >= 2) {
+                term = term.split('"')[1].trim();
+            }
+
+            // Request to endpoint if term is more than 3 characters long
+            if (term.length >= 3) {
+                showDropdownSpinner();
+                showDropdownMenu();
+
+                let scopeTermString = scope + ":" + term;
+                await addAutocompleteItems(scopeTermString);
+            }
+        } else {
+            showDropdownSpinner();
+            showDropdownMenu();
+
+            // No scope included yet so submit assuming it's a record
+            // but only show if it matches exactly
+            await addAutocompleteItems(query);
+        }
+    }
+
+    $(document).ready(async function () {
+        // Trigger if whole query (or term) is 3 characters or more
+        $("input[name='query']").on('input', async (evt) => {
+            let query = evt.target.value;
+
+            // Ignore if query is less than 3 characters
+            if (query.length < 3) {
+                if (!query.length) {
+                    hideDropdownMenu();
+                }
+                return;
+            }
+
+            await checkAutocomplete(query);
+        });
+
+        // Trigger on enter
+        $("input[name='query']").on('keypress', async (evt) => {
+            let query = evt.target.value;
+            if (query.length && evt.which == 13) {
+                await checkAutocomplete(query);
+            }
+        });
+
+        $("button[type='submit']").click(async (evt) => {
+            // TODO: Add error message
+            if (!searchTerms.size) {
+                return;
+            }
+
+            // Request /result
+            window.location.href = "/result?query=" + Array.from(searchTerms).join(",")
+        });
+    }); //end Document Ready
+</script>
+<style>
+    #search-title {
+        position: absolute;
+        {% if notice %}
+        top: 100px;
+        {% else %}
+        top: 200px;
+        {% endif %}
+        z-index: 10;
+    }
+    #search-title h1 {
+        color: white !important;
+        font-size: 50px !important;
+    }
+    #search-bar {
+        position: absolute;
+        {% if notice %}
+        top: 210px;
+        {% else %}
+        top: 300px;
+        {% endif %}
+        z-index: 10;
+    }
+    #search-bar code {
+        font-size: 15px;
+        padding: 2px 5px;
+    }
+    #search-bar .form-text {
+        color: white;
+    }
+    #search-bar .input-group-addon {
+        align-items: center;
+        display: flex;
+        padding: 9px 12px 9px 12px;
+    }
+    div#search-terms {
+        margin-top: 10px;
+        margin-bottom: 10px;
+        height: 60px;
+        overflow-y: auto;
+    }
+    #search-terms > .badge {
+      background-color: #1ec2a0 !important;
+    }
+    #world-map {
+        background-image: url('/static/img/word_map.png');
+        background-position: 50% 50%;
+        background-repeat: no-repeat;
+        padding: 200px;
+    }
+    .carousel {
+        height: 600px !important;
+    }
+    .carousel img {
+        height: 600px !important;
+        object-fit: cover;
+    }
+    .carousel-indicators {
+        padding: 0px !important;
+    }
+    .carousel-item {
+        height: 600px !important;
+    }
+    .carousel-inner img {
+        margin: auto;
+        filter: brightness(.7);
+    }
+</style>
+<div id="search-carousel" class="carousel slide" data-ride="carousel">
+    <div id="search-title" class="container-fluid">
+        <div class="row justify-content-center">
+            <h1>Documenting Global Biodiversity Using DNA</h1>
+        </div>
+    </div>
+    <div id="search-bar" class="container-fluid">
+        <div class="row justify-content-center">
+            <div class="col-sm-6">
+                {% if notice %}
+                <div class="alert alert-info" role="alert" style="width: 100%">
+                    {{ notice }}
+                </div>
+                {% endif %}
+            </div>
+        </div>
+        <div class="row justify-content-center">
+            <div class="col-sm-6">
+                <span class="form-text m-b-none">
+                    Enter search terms with the option of adding a scope per search term.<br>
+                    Scopes include: <code>tax</code>, <code>geo</code>, <code>ids</code>,
+                    <code>bin</code>, <code>inst</code>, <code>recordsetcode</code>
+                </span>
+                <br/>
+                <div class="input-group">
+                    <div class="input-group-prepend">
+                        <span class="input-group-addon"><i class="fa fa-search"></i><span>
+                    </div>
+                    <div class="dropdown">
+                        <div class="dropdown-menu" aria-labelledby="query">
+                            <a id="dropdown-spinner" class="dropdown-item dropdown-special">
+                                <span class="loading dots"></span>
+                                Loading...
+                            </a>
+                            <a id="dropdown-error" class="dropdown-item dropdown-special d-none">
+                                <i class="fa fa-exclamation-triangle"></i>
+                                <span id="dropdown-error-msg"></span>
+                            </a>
+                        </div>
+                    </div>
+                    <input type="text" id="query" name="query" class="form-control" placeholder="Enter search terms" autocomplete="off">
+                    <!-- <span class="input-group-append">
+                        <button type="submit" class="btn btn-primary">Search</button>
+                    </span> -->
+                </div>
+                <div id="search-terms">
+                </div>
+                <div style="display: flex; align-items: center; justify-content: center">
+                    <button type="submit" class="btn btn-primary">Search</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <ol class="carousel-indicators">
+        <li data-target="#search-carousel" data-slide-to="0" class="active"></li>
+        <li data-target="#search-carousel" data-slide-to="1" class=""></li>
+        <li data-target="#search-carousel" data-slide-to="2" class=""></li>
+    </ol>
+    <div class="carousel-inner">
+        <div class="carousel-item active">
+            <img class="d-block w-100" src="/static/img/banner_beetle.png" alt="">
+        </div>
+        <div class="carousel-item">
+            <img class="d-block w-100" src="/static/img/banner_fern.png" alt="">
+        </div>
+        <div class="carousel-item">
+            <img class="d-block w-100" src="/static/img/banner_plantbeetle.png" alt="">
+        </div>
+    </div>
+</div>

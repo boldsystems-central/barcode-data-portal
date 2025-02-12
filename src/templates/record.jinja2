@@ -1,0 +1,533 @@
+{% extends "includes/base.jinja2" %}
+{% block title %} - {{ processid|e }}{% endblock %}
+{% block head %}
+{{ super() }}
+<script type="text/javascript">
+    $(document).ready(function () {
+        let image_data = {{ image_data|tojson|safe }}
+
+        $("#images").empty()
+        let $divGallery = $("<div>")
+            .addClass("slickGallery")
+        for (const [orientation, images] of Object.entries(image_data["images"]).sort()) {
+            for (const image of images) {
+                let image_url = image["image_url"]
+
+                let $div = $("<div>")
+                let $a = $("<a>")
+                    .attr("href", image_url)
+                    .attr("title", orientation)
+                    .attr("data-gallery", "")
+                let $img = $("<img>")
+                    .attr("src", image_url)
+                    .css("width", "100%")
+                $("#ajax-urls").append($img.prop("src") + "\n")
+                let $tableView = $("<table>")
+                    .addClass("table")
+
+                metadataLabels = [
+                    "Object ID", "Batch", "File Name", "Sample ID", "Orientation", "License Holder", "License Year",
+                    "License", "Institution", "Photographer"
+                ]
+                var metaJsonString = JSON.stringify(image);
+                var blob = new Blob([metaJsonString], { type: "application/json" });
+                var metaUrl = URL.createObjectURL(blob);
+                let downloadButtonImage = `<a href="${image_url.substring(0, image_url.lastIndexOf("?"))}" class="btn btn-sg btn-primary"><i class="fa fa-download"></i> Image</a>`
+                let downloadButtonMetadata = `<a href="${metaUrl}" download="image_metadata.json" class="btn btn-sg btn-primary"><i class="fa fa-download"></i> Metadata</a>`
+                let firstRow = image["object_id"] + '<br><br><div class="pull-right">' + downloadButtonImage + ' ' + downloadButtonMetadata + '</div>'
+
+                metadataFields = [
+                    firstRow, image["batch"], image["file_name"], image["sampleid"], image["meta"], image["copyright"]["holder"], image["copyright"]["year"],
+                    image["copyright"]["license"], image["copyright"]["institution"], image["photographer"]
+                ]
+                metadataDisplay = [
+                    "", "d-none", "", "d-none", "", "", "",
+                    "", "", "", ""
+                ]
+                metadataRows = []
+                for (const [label, field, display] of metadataLabels.map((e, i) => [e, metadataFields[i], metadataDisplay[i]])) {
+                    let $tr = $("<tr>")
+                        .addClass(display)
+                    let $thLabel = $("<th>")
+                        .text(`${label}:`)
+                    let $tdField = $("<td>")
+                        .html(field)
+                    $tr.append($thLabel, $tdField)
+                    metadataRows.push($tr)
+                }
+
+                $tableView.append([...metadataRows])
+                $a.append($img)
+                $div.append($a, $tableView)
+                $divGallery.append($div)
+            }
+            $("#images").append($divGallery)
+        }
+        $(".slickGallery").slick({
+            dots: false,
+            infinite: false,
+            slidesToShow: 1,
+            slidesToScroll: 1,
+            adaptiveHeight: true
+        })
+        setInterval(() => {
+            $(".slickGallery").slick("refresh")
+        }, 5000)
+        setTimeout(() => {
+            $("#images-div").toggleClass("sk-loading")
+        }, 5000)
+
+        $("#coordinates-legend").hide()
+        populate_coordinates_map(10)
+    }); //end Document Ready
+</script>
+
+<style>
+    .wordwrap {
+        word-break: break-all;
+    }
+
+    .preformatted {
+        font-family: monospace;
+    }
+
+    .seq-qr-code {
+        display: block;
+        margin: auto;
+        width: 50%;
+    }
+
+    #publications-ibox {
+        display: none;
+    }
+
+    #debug-urls {
+        display: none;
+    }
+</style>
+{% endblock %}
+{% block banner_extra %}
+<div class="pull-right">
+    <a href="/api/documents/{{ query_id }}/download?format=json" download="{{ processid }}.json" class="btn btn-lg btn-primary"><i class="fa fa-download"></i> JSON</a>
+    <a href="/api/documents/{{ query_id }}/download?format=tsv" download="{{ processid }}.tsv" class="btn btn-lg btn-primary"><i class="fa fa-download"></i> TSV</a>
+    <a href="/api/documents/{{ query_id }}/download?format=dwc" download="{{ processid }}.txt" class="btn btn-lg btn-primary"><i class="fa fa-download"></i> DwC</a>
+</div>
+{% endblock %}
+{% block content %}
+<section id="features" class="container services">
+    <div class="row">
+        <div class="col-lg-7">
+            {% if image_data["images"]: %}
+            <div class="ibox">
+                <div id="images-div" class="ibox-content sk-loading">
+                    <div class="navy-line"></div>
+                    <h1>Specimen Images</h1>
+                    <div class="sk-spinner sk-spinner-cube-grid">
+                        <div class="sk-cube"></div>
+                        <div class="sk-cube"></div>
+                        <div class="sk-cube"></div>
+                        <div class="sk-cube"></div>
+                        <div class="sk-cube"></div>
+                        <div class="sk-cube"></div>
+                        <div class="sk-cube"></div>
+                        <div class="sk-cube"></div>
+                        <div class="sk-cube"></div>
+                    </div>
+                    <div id="images"><br><br></div>
+                    <div id="blueimp-gallery" class="blueimp-gallery">
+                        <div class="slides"></div>
+                        <h3 class="title"></h3>
+                        <p class="description"></p>
+                        <a class="prev"></a>
+                        <a class="next"></a>
+                        <a class="close"></a>
+                        <a class="play-pause"></a>
+                        <ol class="indicator"></ol>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+            {% include "includes/coordinates_map.jinja2" %}
+            {% for record in records: %}
+            <div class="ibox">
+                <div class="ibox-content">
+                    <div class="navy-line"></div>
+                    <h1>Sequence: {{ record.marker_code|e if record.marker_code }}</h1>
+                    <div class="table-responsive">
+                        <table id="{{ record.marker_code|e if record.marker_code }}" class="table table-striped">
+                            <tr>
+                                <th>Sequence ID:</th>
+                                <td>{{ record.get("record_id")|e if record.get("record_id") }}</td>
+                                <th>GenBank Accession:</th>
+                                <td>
+                                    {% if record.insdc_acs %}
+                                        {% set is_link = not (record.insdc_acs.startswith("Pending") or record.insdc_acs.endswith("-SUPPRESSED") or record.insdc_acs.startswith("-WITHDRAWN")) %}
+                                        {% if is_link %}
+                                            <a href="http://www.ncbi.nlm.nih.gov/nuccore/{{ record.insdc_acs }}" class="navy-link">{{ record.insdc_acs|e }} <i class="fa fa-link"></i></a>
+                                        {% else %}
+                                            {{ record.insdc_acs|e }}
+                                        {% endif %}
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            <tr>
+                                <th>Primers Forward:</th>
+                                <td>
+                                    {% if record.primers_forward %}
+                                        {% set space = joiner(" ") %}
+                                        {% for primer in record.primers_forward -%}
+                                            {% set name, seq = primer.split(":", 1) if primer else (None, None) %}
+                                            {{ space() }}{{ name if name }} ({{ seq.replace(",", ", ") if seq }})
+                                        {%- endfor %}
+                                    {% endif %}
+                                </td>
+                                <th>Primers Reverse:</th>
+                                <td>
+                                    {% if record.primers_reverse %}
+                                        {% set space = joiner(" ") %}
+                                        {% for primer in record.primers_reverse -%}
+                                            {% set name, seq = primer.split(":", 1) if primer else (None, None) %}
+                                            {{ space() }}{{ name if name }} ({{ seq.replace(",", ", ") if seq }})
+                                        {%- endfor %}
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            <tr>
+                                <th>Sequence Run Site:</th>
+                                <td>{{ record.sequence_run_site|e if record.sequence_run_site }}</td>
+                                <th></th>
+                                <td></td>
+                            </tr>
+                            <tr>
+                                <td colspan="4" class="wordwrap preformatted">{{ record.nuc|trim("-N")|e if record.nuc }}</td>
+                            </tr>
+                            <tr>
+                                <th>Locus:</th>
+                                <td>{{ record.marker_code|e if record.marker_code }}</td>
+                                <td colspan="2" rowspan="3"><img src="/api/qr-code/sequence?sequence={{ record.nuc|trim("-N") if record.nuc }}" class="seq-qr-code"></td>
+                            </tr>
+                            <tr>
+                                <th>Nucleotides:</th>
+                                <td>{{ record.nuc|trim("-N")|length|e if record.nuc }} bp</td>
+                            </tr>
+                            <tr>
+                                <th>Sequence Upload Date:</th>
+                                <td>{{ record.sequence_upload_date|e if record.sequence_upload_date }}</td>
+                            </tr>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+            <div class="ibox">
+                <div class="ibox-content">
+                    <div class="navy-line"></div>
+                    <h1>Attribution</h1>
+                    <div class="table-responsive">
+                        <table id="attribution" class="table table-striped">
+                            <tr>
+                                <th>Specimen Depository:</th>
+                                <td>{{ records[0].inst|e if records[0].inst }}</td>
+                            </tr>
+                            <tr>
+                                <th>Sequencing Center:</th>
+                                <td>{{ records|selectattr("sequence_run_site")|map(attribute="sequence_run_site")|list|sort|unique|join(",") }}</td>
+                            </tr>
+                            <tr>
+                                <th>Photography:</th>
+                                <td>{{ image_data.photographers.keys()|reject("equalto", "null")|sort|unique|join(",") }}</td>
+                            </tr>
+                            <tr>
+                                <th>Collectors:</th>
+                                <td>{{ records[0].collectors|e if records[0].collectors }}</td>
+                            </tr>
+                            <tr>
+                                <th>Specimen Identification:</th>
+                                <td>{{ records[0].identified_by|e if records[0].identified_by }}</td>
+                            </tr>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-5">
+            <div class="ibox">
+                <div class="ibox-content">
+                    <div class="navy-line"></div>
+                    <h1>Identifiers</h1>
+                    <div class="table-responsive">
+                        <table class="table table-striped">
+                            <tr>
+                                <th>Process ID:</th>
+                                <td colspan="2">{{ records[0].processid|e if records[0].processid }}</td>
+                                <th>Process ID Minted Date:</th>
+                                <td colspan="3">{{ records[0].processid_minted_date|e if records[0].processid_minted_date }}</td>
+                            </tr>
+                            <tr>
+                                <th>Sample ID:</th>
+                                <td colspan="2">{{ records[0].sampleid|e if records[0].sampleid }}</td>
+                                <th>Museum ID:</th>
+                                <td colspan="3">{{ records[0].museumid|e if records[0].museumid }}</td>
+                            </tr>
+                            <tr>
+                                <th>Field ID:</th>
+                                <td colspan="2">{{ records[0].fieldid|e if records[0].fieldid }}</td>
+                                <th>Collection Code:</th>
+                                <td colspan="3">{{ records[0].collection_code|e if records[0].collection_code }}</td>
+                            </tr>
+                            <tr>
+                                <th>Deposited In:</th>
+                                <td colspan="5">{{ records[0].inst|e if records[0].inst }}</td>
+                            </tr>
+                            <tr>
+                                <th>Associated Datasets:</th>
+                                <td colspan="5">
+                                    {% if records[0].bold_recordset_code_arr %}
+                                        {% set br = joiner("<br>") %}
+                                        {% for recordset_code in records[0].bold_recordset_code_arr -%}
+                                            {% if recordset_code in dataset_data -%}
+                                                {{ br()|safe }}<a href="/recordset/{{ recordset_code }}" class="navy-link">{{ recordset_code }} <i class="fa fa-link"></i></a> | {{ dataset_data[recordset_code]["dataset.title"] }}
+                                            {%- endif %}
+                                        {%- endfor %}
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            <tr>
+                                <th>Specimen Linkout:</th>
+                                <td colspan="5">{{ records[0].specimen_linkout|e if records[0].specimen_linkout }}</td>
+                            </tr>
+                            <tr>
+                                <th>Checksum:</th>
+                                <td colspan="3">{{ records[0].pre_md5hash|e if records[0].pre_md5hash }}</td>
+                                <td colspan="2" rowspan="3"><img src="/api/qr-code/record?processid={{ processid }}" class="seq-qr-code"></td>
+                            </tr>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            <div class="ibox">
+                <div class="ibox-content">
+                    <div class="navy-line"></div>
+                    <h1>Taxonomy</h1>
+                    <div class="table-responsive">
+                        <table class="table table-striped">
+                            <tr>
+                                <th>Kingdom:</th>
+                                <td>{{ records[0].kingdom|e if records[0].kingdom }}</td>
+                                <th>Subfamily:</th>
+                                <td>{{ records[0].subfamily|e if records[0].subfamily }}</td>
+                            </tr>
+                            <tr>
+                                <th>Phylum:</th>
+                                <td>{{ records[0].phylum|e if records[0].phylum }}</td>
+                                <th>Tribe:</th>
+                                <td>{{ records[0].tribe|e if records[0].tribe }}</td>
+                            </tr>
+                            <tr>
+                                <th>Class:</th>
+                                <td>{{ records[0].class|e if records[0].class }}</td>
+                                <th>Genus:</th>
+                                <td><em>{{ records[0].genus|e if records[0].genus }}</em></td>
+                            </tr>
+                            <tr>
+                                <th>Order:</th>
+                                <td>{{ records[0].order|e if records[0].order }}</td>
+                                <th>Species:</th>
+                                <td><em>{{ records[0].species|e if records[0].species }}</em></td>
+                            </tr>
+                            <tr>
+                                <th>Family:</th>
+                                <td>{{ records[0].family|e if records[0].family }}</td>
+                                <th>Species Reference:</th>
+                                <td>{{ records[0].species_reference|e if records[0].species_reference }}</td>
+                            </tr>
+                            <tr>
+                                <th>BIN ID:</th>
+                                <td><a href="/bin/{{ records[0].bin_uri if records[0].bin_uri }}" class="navy-link">{{ records[0].bin_uri|e if records[0].bin_uri }} {{ '<i class="fa fa-link"></i>'|safe if records[0].bin_uri }}</a></td>
+                                <th>Subspecies:</th>
+                                <td><em>{{ records[0].subspecies|e if records[0].subspecies }}</em></td>
+                            </tr>
+                            <tr>
+                                <th>Identification Method:</th>
+                                <td colspan="3">{{ records[0].identification_method|e if records[0].identification_method }}</td>
+                            </tr>
+                            <tr>
+                                <th>Taxonomy Notes:</th>
+                                <td colspan="3">{{ records[0].taxonomy_notes|e if records[0].taxonomy_notes }}</td>
+                            </tr>
+                            <tr>
+                                <td colspan="4"><small> * <em>Barcode Index Numbers (BIN): Clustered barcode sequences that create OTUs (operational taxonomic units) closely reflective of species groupings</em></small></td>
+                            </tr>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            <div class="ibox">
+                <div class="ibox-content">
+                    <div class="navy-line"></div>
+                    <h1>Specimen</h1>
+                    <div class="table-responsive">
+                        <table class="table table-striped">
+                            <tr>
+                                <th>Voucher Status:</th>
+                                <td>{{ records[0].voucher_type|e if records[0].voucher_type }}</td>
+                                <th>Reproduction:</th>
+                                <td>{{ records[0].reproduction|e if records[0].reproduction }}</td>
+                            </tr>
+                            <tr>
+                                <th>Tissue Descriptor:</th>
+                                <td>{{ records[0].tissue_type|e if records[0].tissue_type }}</td>
+                                <th>Sex:</th>
+                                <td>{{ records[0].sex|e if records[0].sex }}</td>
+                            </tr>
+                            <tr>
+                                <th>Brief Note:</th>
+                                <td>{{ records[0].short_info|e if records[0].short_info }}</td>
+                                <th>Life Stage:</th>
+                                <td>{{ records[0].life_stage|e if records[0].life_stage }}</td>
+                            </tr>
+                            <tr>
+                                <th>Detailed Notes:</th>
+                                <td colspan="3">{{ records[0].notes|e if records[0].notes }}</td>
+                            </tr>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            <div class="ibox">
+                <div class="ibox-content">
+                    <div class="navy-line"></div>
+                    <h1>Collection</h1>
+                    <div class="table-responsive">
+                        <table class="table table-striped">
+                            <tr>
+                                <th>Country/Ocean:</th>
+                                <td>{{ records[0]["country/ocean"]|e if records[0]["country/ocean"] }} ({{ records[0].country_iso|e if records[0].country_iso }})</td>
+                                <th>Collection Date Start:</th>
+                                <td>{{ records[0].collection_date_start|e if records[0].collection_date_start }}</td>
+                            </tr>
+                            <tr>
+                                <th>Province/State:</th>
+                                <td>{{ records[0]["province/state"]|e if records[0]["province/state"] }}</td>
+                                <th>Collection Date End:</th>
+                                <td>{{ records[0].collection_date_end|e if records[0].collection_date_end }}</td>
+                            </tr>
+                            <tr>
+                                <th>Region/County:</th>
+                                <td>{{ records[0].region|e if records[0].region }}</td>
+                                <th>Coord. Source:</th>
+                                <td>{{ records[0].coord_source|e if records[0].coord_source }}</td>
+                            </tr>
+                            <tr>
+                                <th>Sector:</th>
+                                <td>{{ records[0].sector|e if records[0].sector }}</td>
+                                <th>Coord. Accuracy:</th>
+                                <td>{{ records[0].coord_accuracy|e if records[0].coord_accuracy }}</td>
+                            </tr>
+                            <tr>
+                                <th>Exact Site:</th>
+                                <td>{{ records[0].site|e if records[0].site }}</td>
+                                <th>Elevation:</th>
+                                <td>{{ records[0].elev|e if records[0].elev }}</td>
+                            </tr>
+                            {% set lat, lon = records[0].coord if records[0].coord else (None, None) %}
+                            <tr>
+                                <th>Habitat:</th>
+                                <td>{{ records[0].habitat|e if records[0].habitat }}</td>
+                                <th>Elevation Accuracy:</th>
+                                <td>{{ records[0].elev_accuracy|e if records[0].elev_accuracy }}</td>
+                            </tr>
+                            <tr>
+                                <th>Latitude:</th>
+                                <td>{{ lat|e if lat }}</td>
+                                <th>Depth:</th>
+                                <td>{{ records[0].depth|e if records[0].depth }}</td>
+                            </tr>
+                            <tr>
+                                <th>Longitude:</th>
+                                <td>{{ lon|e if lon }}</td>
+                                <th>Depth Accuracy:</th>
+                                <td>{{ records[0].depth_accuracy|e if records[0].depth_accuracy }}</td>
+                            </tr>
+                            <tr>
+                                <th>Sampling Protocol:</th>
+                                <td colspan="3">{{ records[0].sampling_protocol|e if records[0].sampling_protocol }}</td>
+                            </tr>
+                            <tr>
+                                <th>Collectors:</th>
+                                <td colspan="3">{{ records[0].collectors|e if records[0].collectors }}</td>
+                            </tr>
+                            <tr>
+                                <th>Collection Note:</th>
+                                <td colspan="3">{{ records[0].collection_note|e if records[0].collection_note }}</td>
+                            </tr>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            <div class="ibox">
+                <div class="ibox-content">
+                    <div class="navy-line"></div>
+                    <h1>Ecology</h1>
+                    <div class="table-responsive">
+                        <table class="table table-striped">
+                            <tr>
+                                <th>Realm:</th>
+                                <td>{{ records[0].realm|e if records[0].realm }}</td>
+                            </tr>
+                            <tr>
+                                <th>Biome:</th>
+                                <td>{{ records[0].biome|e if records[0].biome }}</td>
+                            </tr>
+                            <tr>
+                                <th>Ecoregion:</th>
+                                <td>{{ records[0].ecoregion|e if records[0].ecoregion }}</td>
+                            </tr>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            <div id="publications-ibox" class="ibox">
+                <div class="ibox-content">
+                    <div class="navy-line"></div>
+                    <h1>Publications</h1>
+                    <div id="publications"></div>
+                </div>
+            </div>
+            <div class="ibox">
+                <div class="ibox-content">
+                    <div class="navy-line"></div>
+                    <h1>Electropherogram Trace Files</h1>
+                    <div id="trace-files">Under development - available shortly</div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div id="debug-urls" class="row">
+        <div class="col-lg-6">
+            <div class="ibox">
+                <div class="ibox-content">
+                    <div class="navy-line"></div>
+                    <h1>Controller URLs</h1>
+                    <pre>
+                        {%- set newline = joiner("\n") -%}
+                        {%- for url in urls: -%}
+                            {{ newline() }}{{ url | e }}
+                        {%- endfor -%}
+                    </pre>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-6">
+            <div class="ibox">
+                <div class="ibox-content">
+                    <div class="navy-line"></div>
+                    <h1>AJAX URLs</h1>
+                    <pre id="ajax-urls"></pre>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+{% endblock %}

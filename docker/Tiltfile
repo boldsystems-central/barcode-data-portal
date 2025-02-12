@@ -1,0 +1,48 @@
+# -*- mode: Python -*-
+
+#
+# This file contains the rules used by Tilt to run the application
+#
+
+version_settings(constraint='>=0.22.1')
+
+# The reference to the docker-compose.yml file
+docker_compose('../docker-compose.yml')
+
+# The command used to (re)build the application
+docker_build(
+  'fastapi-app',
+  '..',
+  dockerfile='Dockerfile',
+  only=['./src', './requirements.txt'],
+  live_update = [
+    sync('../src', '/app'),
+    # Re-run pip if the required packages are modified
+    run(
+        'cd /app && pip install -r ../requirements.txt',
+        trigger=['../requirements.txt']
+    ),
+    restart_container()
+  ])
+
+docker_build(
+  'socketserver-logging',
+  '..',
+  dockerfile='Dockerfile.socketserver_logging',
+  only=['./src', './requirements.txt'],
+  live_update = [
+    sync('../src', '/app'),
+    # Re-run pip if the required packages are modified
+    run(
+        'cd /app && pip install -r ../requirements.txt',
+        trigger=['../requirements.txt']
+    ),
+    restart_container()
+  ])
+
+# Resource grouping
+dc_resource('fastapi-app', labels=["app"])
+dc_resource('socketserver-logging', labels=["app"])
+dc_resource('nginx', labels=["app"])
+dc_resource('couchbase', labels=["db"])
+dc_resource('redis', labels=["db"])

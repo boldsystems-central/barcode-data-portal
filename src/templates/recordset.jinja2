@@ -1,0 +1,458 @@
+{% extends "includes/base.jinja2" %}
+{% set DOWNLOAD_LIMIT = 1000000 %}
+{% block title %} - {{ recordsetcode|e }}{% endblock %}
+{% block head %}
+{{ super() }}
+<script type="text/javascript">
+    const MORE_ATTR_COUNT = 10
+    const PLOT_LIMIT = 10
+
+    const ANCILLARY_CONFIG = []
+    const ANCILLARY_CONFIG_TSV = `selector	field	sanitizers
+#subtitle	dataset.title	None
+#dataset-title	dataset.title	None
+#dataset-doi	dataset.doi	linkDOI
+#dataset-descr	dataset.descr	None`
+
+    let lines = ANCILLARY_CONFIG_TSV.trim().split(/\r?\n/)
+    let headers = lines[0].split("\t");
+
+    for (let i = 1; i < lines.length; i++) { // Skip header line
+        let fields = lines[i].split("\t")
+
+        let row = {}
+        headers.forEach((key, index) => row[key] = fields[index])
+        ANCILLARY_CONFIG.push(row)
+    }
+
+    $(document).ready(async function () {
+        $(".no-download-alert").on("click", e => {
+            e.preventDefault()
+            swal({
+                title: "Download Not Permitted",
+                text: "Number of records to download exceeds limit of {{ DOWNLOAD_LIMIT }}. Queued downloads will be available shortly.",
+                type: "warning"
+            });
+        })
+
+        populate_ancillary_elements("datasets", "dataset.code", "{{ recordsetcode }}", ANCILLARY_CONFIG)
+
+        {% if image_count: %}
+        populate_image_gallery()
+        {% endif %}
+        populate_coordinates_map()
+
+        let institutions = {{ inst|tojson|safe }}
+        let institutionsDoughnutData = {
+            labels: [],
+            datasets: [{
+                data: [],
+                backgroundColor: []
+            }]
+        }
+        let institutionsOther = 0
+        let institutionsOtherCount = 0
+        for (const [name, count] of Object.entries(institutions).filter(name => name[0] != "null").map(name => name[0].trim() === "" ? ["Unspecified", name[1]] : name).sort((a, b) => b[1] - a[1])) {
+            if (institutionsDoughnutData.datasets[0].data.length < PLOT_LIMIT) {
+                institutionsDoughnutData.labels.push(name)
+                institutionsDoughnutData.datasets[0].data.push(count)
+            } else {
+                institutionsOther += 1
+                institutionsOtherCount += count
+            }
+        }
+        if (institutionsOtherCount > 0) {
+            institutionsDoughnutData.labels.push(`${institutionsOther} Other(s)`)
+            institutionsDoughnutData.datasets[0].data.push(institutionsOtherCount)
+        }
+        for (let i = 0; i < institutionsDoughnutData.datasets[0].data.length; i++) {
+            institutionsDoughnutData.datasets[0].backgroundColor.push(`rgba(224,118,5,${Math.exp(-(0.5 * i)) + 0.05})`)
+        }
+        new Chart(
+            document.getElementById('institutions-chart').getContext("2d"),
+            {
+                plugins: [
+                    {
+                        beforeDraw: function(chart) {
+                            let width = chart.chart.width,
+                                height = chart.chart.height,
+                                ctx = chart.chart.ctx;
+
+                            ctx.restore();
+
+                            let fontSize = (height / 200).toFixed(2);
+                            ctx.font = fontSize + "em sans-serif";
+                            ctx.textBaseline = "middle";
+
+                            let text = "Specimen"
+                            let x = Math.round((width - ctx.measureText(text).width) / 2);
+                            let y = Math.round((height / 2) - (height / 16));
+                            ctx.fillText(text, x, y);
+
+                            fontSize = (height / 200).toFixed(2);
+                            ctx.font = fontSize + "em sans-serif";
+                            ctx.textBaseline = "alphabetic";
+
+                            text = "Depositories"
+                            x = Math.round((width - ctx.measureText(text).width) / 2);
+                            y = Math.round((height / 2) + (height / 16));
+                            ctx.fillText(text, x, y);
+
+                            ctx.save();
+                        }
+                    },
+                ],
+                type: 'doughnut',
+                data: institutionsDoughnutData,
+                options: {
+                    legend: {
+                        display: false,
+                        position: 'bottom',
+                        align: 'start',
+                        labels: {
+                            usePointStyle: true
+                        }
+                    },
+                    responsive: true
+                }
+            }
+        )
+
+        let sequenceRunSites = {{ sequence_run_site|tojson|safe }}
+        let sequenceRunSitesDoughnutData = {
+            labels: [],
+            datasets: [{
+                data: [],
+                backgroundColor: []
+            }]
+        }
+        let sequenceRunSitesOther = 0
+        let sequenceRunSitesOtherCount = 0
+        for (const [name, count] of Object.entries(sequenceRunSites).filter(name => name[0] != "null").map(name => name[0].trim() === "" ? ["Unspecified", name[1]] : name).sort((a, b) => b[1] - a[1])) {
+            if (sequenceRunSitesDoughnutData.datasets[0].data.length < PLOT_LIMIT) {
+                sequenceRunSitesDoughnutData.labels.push(name)
+                sequenceRunSitesDoughnutData.datasets[0].data.push(count)
+            } else {
+                sequenceRunSitesOther += 1
+                sequenceRunSitesOtherCount += count
+            }
+        }
+        if (sequenceRunSitesOtherCount > 0) {
+            sequenceRunSitesDoughnutData.labels.push(`${sequenceRunSitesOther} Other(s)`)
+            sequenceRunSitesDoughnutData.datasets[0].data.push(sequenceRunSitesOtherCount)
+        }
+        for (let i = 0; i < sequenceRunSitesDoughnutData.datasets[0].data.length; i++) {
+            sequenceRunSitesDoughnutData.datasets[0].backgroundColor.push(`rgba(10,79,89,${Math.exp(-(0.5 * i)) + 0.05})`)
+        }
+        new Chart(
+            document.getElementById('sequence-run-sites-chart').getContext("2d"),
+            {
+                plugins: [
+                    {
+                        beforeDraw: function(chart) {
+                            let width = chart.chart.width,
+                                height = chart.chart.height,
+                                ctx = chart.chart.ctx;
+
+                            ctx.restore();
+
+                            let fontSize = (height / 200).toFixed(2);
+                            ctx.font = fontSize + "em sans-serif";
+                            ctx.textBaseline = "middle";
+
+                            let text = "Sequencing"
+                            let x = Math.round((width - ctx.measureText(text).width) / 2);
+                            let y = Math.round((height / 2) - (height / 16));
+                            ctx.fillText(text, x, y);
+
+                            fontSize = (height / 200).toFixed(2);
+                            ctx.font = fontSize + "em sans-serif";
+                            ctx.textBaseline = "alphabetic";
+
+                            text = "Centers"
+                            x = Math.round((width - ctx.measureText(text).width) / 2);
+                            y = Math.round((height / 2) + (height / 16));
+                            ctx.fillText(text, x, y);
+
+                            ctx.save();
+                        }
+                    },
+                ],
+                type: 'doughnut',
+                data: sequenceRunSitesDoughnutData,
+                options: {
+                    legend: {
+                        display: false,
+                        position: 'bottom',
+                        align: 'start',
+                        labels: {
+                            usePointStyle: true
+                        }
+                    },
+                    responsive: true
+                }
+            }
+        )
+
+        let tabular_metadata_fields = {
+            'spec_identification': {{identified_by|tojson|safe}}
+        }
+        for (const [attribution, metadata] of Object.entries(tabular_metadata_fields)) {
+            let attr_count = 0
+            let span_set = []
+            let span_set_more = []
+
+            for (const [name, count] of Object.entries(metadata).filter(attr => attr[0] != "null").map(attr => attr[0].trim() === "" ? ["Unspecified", attr[1]] : attr).sort((a, b) => b[1] - a[1])) {
+                if (attr_count < MORE_ATTR_COUNT) {
+                    span_set.push(`<span>${name} [${count}]</span>`)
+                } else {
+                    span_set_more.push(`<span>${name} [${count}]</span>`)
+                }
+                attr_count ++
+            }
+
+            let attribution_span = span_set.join("<br>")
+            let attribution_span_more = ""
+            if (span_set_more.length > 0) {
+                attribution_span_more = `<span id="more-attr-${attribution}" class="collapse"><br>${span_set_more.join("<br>")}</span>`
+                attribution_span_more += `<br><a class="navy-link more-attr-link" href="#" role="button" data-span="more-attr-${attribution}">More »</a>`
+            }
+
+            $(`#${attribution}`).html(attribution_span + attribution_span_more)
+            $(".more-attr-link", `#${attribution}`).on("click", e => {
+                e.preventDefault()
+
+                let attribution_span_more = $(e.target).data("span")
+                if ($(`#${attribution_span_more}`).is(":hidden")) {
+                    $(`#${attribution_span_more}`).show()
+                    $(e.target).text("Less «")
+                } else {
+                    $(`#${attribution_span_more}`).hide()
+                    $(e.target).text("More »")
+                }
+                return false
+            })
+        }
+
+        let collection = {{ collection_date_start|tojson|safe }}
+        let collectionLineData = {
+                labels: [],
+                datasets: [
+                    {
+                        label: "Year-Month",
+                        backgroundColor: "rgba(74,149,195,0.5)",
+                        borderColor: "rgba(74,149,195,0.7)",
+                        pointBackgroundColor: "rgba(74,149,195,1)",
+                        pointBorderColor: "#fff",
+                        data: []
+                    }
+                ]
+            }
+        for (const [year_month, count] of Object.entries(collection).filter(year => year[0] != "null").sort((a, b) => Date.parse(a[0]) - Date.parse(b[0]))) {
+            let year_month_date = new Date(year_month + "-15")
+            let year = year_month_date.getFullYear()
+            let month = year_month_date.toLocaleString("default", { month: "short" })
+            collectionLineData.labels.push(`${year}-${month}`)
+            collectionLineData.datasets[0].data.push(count)
+        }
+        new Chart(
+            document.getElementById("collection-chart").getContext("2d"),
+            {
+                type: "line",
+                data: collectionLineData,
+                options: {
+                    responsive: true
+                }
+            }
+        )
+
+        populate_taxon_treemap()
+        populate_records_table()
+    }); //end Document Ready
+</script>
+
+<style>
+    .flex-center {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    #publications-ibox {
+        display: none;
+    }
+
+    #debug-urls {
+        display: none;
+    }
+</style>
+{% include "includes/ancillary_data.jinja2" %}
+{% endblock %}
+{% block content %}
+<section id="features" class="container services">
+    <div class="pull-right">
+        {% if stats.sequences > DOWNLOAD_LIMIT %}
+        <a href="#" class="btn btn-lg btn-primary no-download-alert"><i class="fa fa-download"></i> JSON</a>
+        <a href="#" class="btn btn-lg btn-primary no-download-alert"><i class="fa fa-download"></i> TSV</a>
+        <a href="#" class="btn btn-lg btn-primary no-download-alert"><i class="fa fa-download"></i> DwC</a>
+        {% else %}
+        <a href="/api/documents/{{ query_id }}/download?format=json" download="{{ recordsetcode }}.json" class="btn btn-lg btn-primary"><i class="fa fa-download"></i> JSON</a>
+        <a href="/api/documents/{{ query_id }}/download?format=tsv" download="{{ recordsetcode }}.tsv" class="btn btn-lg btn-primary"><i class="fa fa-download"></i> TSV</a>
+        <a href="/api/documents/{{ query_id }}/download?format=dwc" download="{{ recordsetcode }}.txt" class="btn btn-lg btn-primary"><i class="fa fa-download"></i> DwC</a>
+        {% endif %}
+    </div>
+    <h1 id="subtitle">{{ subtitle|e }}</h1>
+    <div class="row">
+        <div class="col-lg-7">
+            {% if image_count: %}
+            {% include "includes/image_gallery.jinja2" %}
+            {% endif %}
+            {% include "includes/coordinates_map.jinja2" %}
+        </div>
+        <div class="col-lg-5">
+            <div class="ibox">
+                <div class="ibox-content">
+                    <div class="navy-line"></div>
+                    <h1>Dataset Metadata</h1>
+                    <table class="table table-striped">
+                        <tr>
+                            <th>Title:</th>
+                            <td id="dataset-title"></td>
+                        </tr>
+                        <tr>
+                            <th>DOI:</th>
+                            <td id="dataset-doi"></td>
+                        </tr>
+                        <tr>
+                            <th>Description:</th>
+                            <td id="dataset-descr"></td>
+                        </tr>
+                    </table>
+                </div>
+            </div>
+            <div class="ibox">
+                <div class="ibox-content">
+                    <div class="navy-line"></div>
+                    <h1>Dataset Overview</h1>
+                    <table class="table table-striped">
+                        <tr>
+                            <th>Dataset Code:</th>
+                            <td>{{ recordsetcode|e }}</td>
+                        </tr>
+                        <tr>
+                            <th>Specimens:</th>
+                            <td>{{ stats.specimens|e }}</td>
+                        </tr>
+                        <tr>
+                            <th>Sequences:</th>
+                            <td>{{ stats.sequences|e }}</td>
+                        </tr>
+                        <tr>
+                            <th>Records with BINs:</th>
+                            <td>{{ stats.records_w_bins|e }}</td>
+                        </tr>
+                        <tr>
+                            <th>Records with Species:</th>
+                            <td>{{ stats.records_w_species|e }}</td>
+                        </tr>
+                        <tr>
+                            <th>BINs:</th>
+                            <td>{{ stats.bins|e }}</td>
+                        </tr>
+                        <tr>
+                            <th>Species:</th>
+                            <td>{{ stats.species|e }}</td>
+                        </tr>
+                        <tr>
+                            <th>Countries/Oceans:</th>
+                            <td>{{ stats["countries/oceans"]|e }}</td>
+                        </tr>
+                        <tr>
+                            <th>Institutions:</th>
+                            <td>{{ stats.institutions|e }}</td>
+                        </tr>
+                    </table>
+                </div>
+            </div>
+            <div class="ibox">
+                <div class="ibox-content">
+                    <div class="navy-line"></div>
+                    <h1>Collection Activity</h1>
+                    <div>
+                        <canvas id="collection-chart" height="140"></canvas>
+                    </div>
+                </div>
+            </div>
+            <div id="publications-ibox" class="ibox">
+                <div class="ibox-content">
+                    <div class="navy-line"></div>
+                    <h1>Publications</h1>
+                    <div id="publications"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="row">
+        <div class="col-lg-12">
+            <div class="ibox">
+                <div class="ibox-content">
+                    <div class="navy-line-center"></div>
+                    <h1 class="text-center">Attribution</h1>
+                    <div class="row">
+                        <div class="col">
+                            <canvas id="sequence-run-sites-chart" height="300"></canvas>
+                        </div>
+                        <div class="col">
+                            <canvas id="institutions-chart" height="300"></canvas>
+                        </div>
+                        <div class="col flex-center">
+                            <div>
+                                <span><strong>Specimen Identification:</strong></span><br>
+                                <span id="spec_identification"><span class="loading"></span></span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="row">
+        <div class="col-lg-12">
+            {% set taxon_treemap_title_center = True %}
+            {% include "includes/taxon_treemap.jinja2" %}
+        </div>
+    </div>
+    <div class="row">
+        <div class="col-lg-12">
+            {% set records_title_center = True %}
+            {% set records_title = "Records (Limited to %s)" % extent_limit if extent_limit and stats.sequences > extent_limit else "Records" %}
+            {% include "includes/records_table.jinja2" %}
+        </div>
+    </div>
+    <div id="debug-urls" class="row">
+        <div class="col-lg-6">
+            <div class="ibox">
+                <div class="ibox-content">
+                    <div class="navy-line"></div>
+                    <h1>Controller URLs</h1>
+                    <pre>
+                        {%- set newline = joiner("\n") -%}
+                        {%- for url in urls: -%}
+                            {{ newline() }}{{ url | e }}
+                        {%- endfor -%}
+                    </pre>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-6">
+            <div class="ibox">
+                <div class="ibox-content">
+                    <div class="navy-line"></div>
+                    <h1>AJAX URLs</h1>
+                    <pre id="ajax-urls"></pre>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+{% endblock %}

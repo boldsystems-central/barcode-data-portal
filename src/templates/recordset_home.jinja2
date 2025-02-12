@@ -1,0 +1,143 @@
+{% extends "includes/base.jinja2" %}
+{% block title %} - Dataset Home{% endblock %}
+{% block head %}
+{{ super() }}
+<script type="text/javascript">
+    $(document).ready(async function () {
+        let fields = [
+            "dataset.code",
+            "dataset.title",
+            "dataset.descr",
+            "dataset.doi",
+            "specimens",
+            "sequences",
+            "bin_uri",
+            "species",
+            "country/ocean"
+        ].join(";")
+        let filterData = (json) => {
+            let filteredData = []
+            for (let i = 0, len = json.length; i < len; i++) {
+                if (json[i]["dataset.doi"]) {
+                    filteredData.push(json[i])
+                }
+            }
+            return filteredData
+        }
+        let columns = [
+            {
+                title: "Title",
+                data: null
+            },
+            {
+                title: "Description",
+                data: null
+            },
+            {
+                title: "Records",
+                data: "specimens"
+            },
+            {
+                title: "Sequences",
+                data: "sequences"
+            },
+            {
+                title: "BINs",
+                data: "bin_uri"
+            },
+            {
+                title: "Species",
+                data: "species"
+            },
+            {
+                title: "Countries Oceans",
+                data: "country/ocean"
+            }
+        ]
+        let columnDefs = [
+            {
+                targets: [0],
+                className: "highlight",
+                render: function (data) {
+                    return data["dataset.title"] + '<br>' +
+                        '(<a href="/recordset/' + encodeURIComponent(data["dataset.code"]) + '" class="navy-link">' + data["dataset.code"] + ' <i class="fa fa-database"></i></a>)' + '<br>' +
+                        '(doi.org/' + data["dataset.doi"] + ')'
+                }
+            },
+            {
+                targets: [1],
+                render: function (data) {
+                    return data["dataset.descr"]
+                }
+            },
+            {
+                targets: [2, 3, 4, 5, 6],
+                render: function (data) {
+                    return data ? data : 0
+                }
+            }
+        ]
+        populate_ancillary_table("datasets", fields, 1, filterData, [[5, 'desc']], columns, columnDefs, "recordset_home")
+    }); //end Document Ready
+</script>
+<style>
+    #search-title {
+        position: absolute;
+        top: 220px;
+        z-index: 10;
+    }
+
+    #search-title h1 {
+        color: white !important;
+        font-size: 50px !important;
+    }
+
+    .carousel {
+        height: 600px !important;
+    }
+
+    .carousel img {
+        height: 600px !important;
+        object-fit: cover;
+    }
+
+    .carousel-indicators {
+        padding: 0px !important;
+    }
+
+    .carousel-item {
+        height: 600px !important;
+    }
+
+    .carousel-inner img {
+        margin: auto;
+        filter: brightness(.7);
+    }
+</style>
+{% endblock %}
+{% block content %}
+<div id="search-carousel" class="carousel slide" data-ride="carousel">
+    <div id="search-title" class="container-fluid">
+        <div class="row justify-content-center">
+            <h1>Datasets</h1>
+        </div>
+    </div>
+    <div class="carousel-inner">
+        <div class="carousel-item active">
+            <img class="d-block w-100" src="/static/img/banner_arialislandcrater.png" alt="">
+        </div>
+    </div>
+</div>
+
+{% include "wp-templates/recordset_home.html" %}
+
+<section id="features" class="container services">
+    <div class="row">
+        <div class="col-lg-12">
+            {% set ancillary_title = "Datasets" %}
+            {% include "includes/ancillary_table.jinja2" %}
+        </div>
+    </div>
+</section>
+
+{% endblock %}

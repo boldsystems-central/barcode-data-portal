@@ -1,0 +1,134 @@
+{% extends "includes/base.jinja2" %}
+{% block title %}{% endblock %}
+{% block head %}
+{{ super() }}
+<script type="text/javascript">
+    $(document).ready(async function () {
+        let fields = [
+            "name",
+            "seq",
+            "marker_code",
+            "direction",
+            "submitter",
+            "sequences",
+            "bin_uri",
+            "species",
+            "sequence_run_site"
+        ].join(";")
+        let columns = [
+            { render: DataTable.render.select() },
+            {
+                title: "Name",
+                data: "name"
+            },
+            {
+                title: "Sequence",
+                data: "seq"
+            },
+            {
+                title: "Marker",
+                data: "marker_code"
+            },
+            {
+                title: "Direction",
+                data: "direction"
+            },
+            {
+                title: "Submitter",
+                data: "submitter"
+            },
+            {
+                title: "Sequences Generated",
+                data: "sequences"
+            },
+            {
+                title: "BINs Associated",
+                data: "bin_uri"
+            },
+            {
+                title: "Species Associated",
+                data: "species"
+            },
+            {
+                title: "Labs Utilitzed",
+                data: "sequence_run_site"
+            }
+        ]
+        let columnDefs = [
+            {
+                targets: [6, 7, 8, 9],
+                render: function (data) {
+                    return data ? data : 0
+                }
+            },
+            {
+                orderable: false,
+                render: DataTable.render.select(),
+                targets: 0
+            }
+        ]
+        populate_ancillary_table("primers", fields, 0, "", [[1, 'asc']], columns, columnDefs, "primer_home")
+    }); //end Document Ready
+</script>
+<style>
+    #search-title {
+        position: absolute;
+        top: 220px;
+        z-index: 10;
+    }
+
+    #search-title h1 {
+        color: white !important;
+        font-size: 50px !important;
+    }
+
+    .carousel {
+        height: 600px !important;
+    }
+
+    .carousel img {
+        height: 600px !important;
+        object-fit: cover;
+    }
+
+    .carousel-indicators {
+        padding: 0px !important;
+    }
+
+    .carousel-item {
+        height: 600px !important;
+    }
+
+    .carousel-inner img {
+        margin: auto;
+        filter: brightness(.7);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div id="search-carousel" class="carousel slide" data-ride="carousel">
+    <div id="search-title" class="container-fluid">
+        <div class="row justify-content-center">
+            <h1>Primers</h1>
+        </div>
+    </div>
+    <div class="carousel-inner">
+        <div class="carousel-item active">
+            <img class="d-block w-100" src="/static/img/Primer.webp" alt="">
+        </div>
+    </div>
+</div>
+
+{% include "wp-templates/primer_home.html" %}
+
+<section id="features" class="container services">
+    <div class="row">
+        <div class="col-lg-12">
+            {% set ancillary_title = "Primers" %}
+            {% include "includes/ancillary_table.jinja2" %}
+        </div>
+    </div>
+</section>
+
+{% endblock %}

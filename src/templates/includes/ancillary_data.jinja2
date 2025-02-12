@@ -1,0 +1,70 @@
+<script type="text/javascript">
+    function stripHTML(str) {
+        // TODO: Stub function, implement sanitization
+        return str
+    }
+
+    function linkDOI(str) {
+        if (str) return `<a href="https://doi.org/${str}" class="navy-link">doi.org/${str} <i class="fa fa-link"></i></a>`
+        else return ''
+    }
+
+    function linkBIN(str) {
+        if (str) return `<a href="/bin/${str}" class="navy-link">${str} <i class="fa fa-link"></i></a>`
+        else return ''
+    }
+
+    function linkInst(str) {
+        if (str) return `<a href="${str}" class="navy-link"><i class="fa fa-institution"></i></a>`
+        else return ''
+    }
+
+    function populate_ancillary_elements(collection, key, values, configuration) {
+        return fetch(`/api/ancillary?collection=${collection}&key=${key}&values=${values}`)
+            .then(response => {
+                $("#ajax-urls").append(response.url + "\n")
+                if (!response.ok) {
+                    throw new Error(`Request failed with status ${response.status}`)
+                }
+                return response.json()
+            })
+            .then(documents => {
+                if (documents.length < 1) {
+                    return
+                }
+                let data = documents[0]
+                let anc_export = {}
+
+                for (let i = 0; i < configuration.length; i++) {
+                    let selector = configuration[i]["selector"]
+                    let field = configuration[i]["field"]
+                    let sanitizers = configuration[i]["sanitizers"]
+
+                    if (selector === "export") {
+                        let value  = data[field]
+                        sanitizers.split(",").forEach(sanitizer => {
+                            let fn = window[sanitizer]
+                            if (typeof fn === "function") value = fn.apply(null, [value])
+                        })
+                        anc_export[field] = value
+                    }
+
+                    if ($(selector).length < 1) {
+                        // TODO: Track if any selector failed, throw error
+                        continue
+                    }
+
+                    if (field in data) {
+                        let value  = data[field]
+                        sanitizers.split(",").forEach(sanitizer => {
+                            let fn = window[sanitizer]
+                            if (typeof fn === "function") value = fn.apply(null, [value])
+                        })
+                        $(selector).html(value)
+                    }
+                }
+
+                return anc_export
+            })
+    }
+</script>

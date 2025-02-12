@@ -1,0 +1,106 @@
+#
+# docker-compose services
+#
+# This file includes and defines all the services needed to run the application in the development environment
+#
+
+services:
+  # The application to be developed
+  fastapi-app:
+    # The name of the Docker image
+    image: ${FASTAPI_IMAGE_NAME:-fastapi-app:latest}
+    # The command run in Docker image
+    command: gunicorn main:app --workers 24 --worker-class uvicorn.workers.UvicornWorker --bind 0.0.0.0:8000
+    # The restart policy of the application
+    restart: unless-stopped
+    # The port that is exposed by the application in the form EXTERNAL_PORT:INTERNAL_PORT
+    ports:
+      - "8000:8000"
+    # The file where the environment variables are set
+    env_file:
+      - .env
+    # The Docker networks used by the application
+    networks:
+      - webnet-production
+      - backend-production
+    # The dependencies of the application
+    depends_on:
+      socketserver-logging:
+        condition: service_started
+      redis:
+        condition: service_started
+    # The name of the running Docker container
+    container_name: fastapi-app-production
+
+  # The logging service used by the application
+  socketserver-logging:
+    # The name of the Docker image
+    image: ${SOCKET_IMAGE_NAME:-socketserver-logging:latest}
+    # The restart policy of the logging service
+    restart: unless-stopped
+    # The port that is exposed by the logging service in the form EXTERNAL_PORT:INTERNAL_PORT
+    ports:
+      - "9020:9020"
+    # The file where the environment variables are set
+    env_file:
+      - .env
+    # The Docker networks used by the logging service
+    networks:
+      - backend-production
+    volumes:
+    # The volume used by the logging service:
+      - /var/log/bold-public-portal:/var/log/bold-public-portal
+    # The name of the running Docker container
+    container_name: socketserver-logging-production
+
+  # The reverse proxy to access the application
+  nginx:
+    # The name of the Docker image
+    image: nginx:latest
+    # The restart policy of nginx
+    restart: unless-stopped
+    # The configuration template of nginx mounted as a volume inside the Docker container + certificates
+    volumes:
+      - /var/log/nginx:/var/log/nginx
+      - ./docker/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./docker/nginx/portal.conf.template:/etc/nginx/templates/portal.conf.template:ro
+      - ${SSL_CERT}:${SSL_CERT}:ro
+      - ${SSL_CERT_KEY}:${SSL_CERT_KEY}:ro
+    # The port that is exposed by nginx in the form EXTERNAL_PORT:INTERNAL_PORT
+    ports:
+      - "80:80"
+      - "443:443"
+    # The file where the environment variables are set
+    env_file:
+      - .env
+    # The Docker network used by nginx
+    networks:
+      - webnet-production
+    # The dependencies of nginx
+    depends_on:
+      - fastapi-app
+    # The name of the running Docker container
+    container_name: nginx-production
+
+  # The Redis cache used by the application
+  redis:
+    # The name of the Docker image
+    image: redis:7.0-bookworm
+    # The restart policy of the cache
+    restart: unless-stopped
+    # The port that is exposed by the cache in the form EXTERNAL_PORT:INTERNAL_PORT
+    ports:
+      - "6379:6379"
+    # The Docker network used by the cache
+    networks:
+      - backend-production
+    # The name of the running Docker container
+    container_name: redis-production
+
+# The Docker networks used by the services
+networks:
+  # Front-end network accessible from `localhost`
+  webnet-production:
+  # Back-end network internal to Docker containers
+  backend-production:
+    internal: true

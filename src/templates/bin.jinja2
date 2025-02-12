@@ -1,0 +1,429 @@
+{% extends "includes/base.jinja2" %}
+{% set DOWNLOAD_LIMIT = 1000000 %}
+{% block title %} - {{ bin_uri|e }}{% endblock %}
+{% block head %}
+{{ super() }}
+<script type="text/javascript">
+    const PLOT_LIMIT = 10
+
+    const ANCILLARY_CONFIG = []
+    const ANCILLARY_CONFIG_TSV = `selector	field	sanitizers
+#bin-doi	barcodecluster.doi	linkDOI
+#avg-dist	barcodecluster.avgdist	None
+#min-dist	barcodecluster.mindist	None
+#max-dist	barcodecluster.maxdist	None
+#nn-dist	barcodecluster.nn_dist	None
+export	record_count	None
+export	nearestneighbour.uri	None
+export	barcodecluster.histogram	None
+export	barcodecluster.histogram_nn	None
+export	barcodecluster.histogram_start	None
+export	barcodecluster.histogram_binsize	None`
+
+    let lines = ANCILLARY_CONFIG_TSV.trim().split(/\r?\n/)
+    let headers = lines[0].split("\t");
+
+    for (let i = 1; i < lines.length; i++) { // Skip header line
+        let fields = lines[i].split("\t")
+
+        let row = {}
+        headers.forEach((key, index) => row[key] = fields[index])
+        ANCILLARY_CONFIG.push(row)
+    }
+
+    const ANCILLARY_NN_CONFIG = []
+    const ANCILLARY_NN_CONFIG_TSV = `selector	field	sanitizers
+#nearest-bin-uri	barcodecluster.uri	linkBIN
+#nearest-avg-dist	barcodecluster.avgdist	None
+#nearest-min-dist	barcodecluster.mindist	None
+#nearest-max-dist	barcodecluster.maxdist	None`
+
+    lines = ANCILLARY_NN_CONFIG_TSV.trim().split(/\r?\n/)
+    headers = lines[0].split("\t");
+
+    for (let i = 1; i < lines.length; i++) { // Skip header line
+        let fields = lines[i].split("\t")
+
+        let row = {}
+        headers.forEach((key, index) => row[key] = fields[index])
+        ANCILLARY_NN_CONFIG.push(row)
+    }
+
+    $(document).ready(async function () {
+        $(".no-download-alert").on("click", e => {
+            e.preventDefault()
+            swal({
+                title: "Download Not Permitted",
+                text: "Number of records to download exceeds limit of {{ DOWNLOAD_LIMIT }}. Queued downloads will be available shortly.",
+                type: "warning"
+            });
+        })
+
+        populate_ancillary_elements("barcodeclusters", "barcodecluster.uri", "{{ bin_uri }}", ANCILLARY_CONFIG)
+            .then(anc_export => {
+                populate_ancillary_elements("barcodeclusters", "barcodecluster.uri", anc_export["nearestneighbour.uri"], ANCILLARY_NN_CONFIG)
+
+                let private_record_count = anc_export["record_count"] - {{ stats.specimens }}
+                $("#record-count").text(`{{ stats.specimens }} [${private_record_count} Private]`)
+
+                if (anc_export["barcodecluster.histogram_binsize"]) {
+                    let labels = [anc_export["barcodecluster.histogram_start"]]
+                    let within_bin = anc_export["barcodecluster.histogram"].split(",")
+                    let nn_bin = anc_export["barcodecluster.histogram_nn"].split(",")
+                    for (let i = 1; i < within_bin.length; i++) {
+                        labels.push((labels[i - 1] + anc_export["barcodecluster.histogram_binsize"]))
+                    }
+
+                    var distanceBarData = {
+                        labels: labels.map(value => value.toFixed(1)),
+                        datasets: [
+                            {
+                                label: "Within-BIN",
+                                backgroundColor: "rgba(247,165,88,1)",
+                                pointBorderColor: "#fff",
+                                data: within_bin
+                            },
+                            {
+                                label: "NN-BIN",
+                                backgroundColor: "rgba(117,154,178,1)",
+                                pointBorderColor: "#fff",
+                                data: nn_bin
+                            }
+                        ]
+                    }
+
+                    new Chart(
+                        document.getElementById("distance-chart").getContext("2d"),
+                        {
+                            type: "bar",
+                            data: distanceBarData,
+                            options: {
+                                responsive: true,
+                                scales: {
+                                    xAxes: [{
+                                        barPercentage: 1
+                                    }]
+                                }
+                            }
+                        }
+                    )
+
+                    $("#distance-ibox").show()
+                }
+            })
+
+        {% if image_count: %}
+        populate_image_gallery()
+        {% endif %}
+        populate_coordinates_map()
+
+        let countries = {{ countries|tojson|safe }}
+        let countriesDoughnutData = {
+            labels: [],
+            datasets: [{
+                data: [],
+                backgroundColor: []
+            }]
+        }
+        let countriesOther = 0
+        let countriesOtherCount = 0
+        for (const [name, count] of Object.entries(countries).filter(name => name[0] != "null").map(name => name[0].trim() === "" ? ["Unspecified", name[1]] : name).sort((a, b) => b[1] - a[1])) {
+            if (countriesDoughnutData.datasets[0].data.length < PLOT_LIMIT) {
+                countriesDoughnutData.labels.push(name)
+                countriesDoughnutData.datasets[0].data.push(count)
+            } else {
+                countriesOther += 1
+                countriesOtherCount += count
+            }
+        }
+        if (countriesOtherCount > 0) {
+            countriesDoughnutData.labels.push(`${countriesOther} Other(s)`)
+            countriesDoughnutData.datasets[0].data.push(countriesOtherCount)
+        }
+        for (let i = 0; i < countriesDoughnutData.datasets[0].data.length; i++) {
+            countriesDoughnutData.datasets[0].backgroundColor.push(`rgba(7,106,86,${Math.exp(-(0.5 * i)) + 0.05})`)
+        }
+        new Chart(
+            document.getElementById('country-bin-chart').getContext("2d"),
+            {
+                type: 'doughnut',
+                data: countriesDoughnutData,
+                options: {
+                    legend: false,
+                    responsive: true
+                }
+            }
+        )
+
+        fetch(`/api/taxonomy/{{ query_id }}`)
+            .then(response => {
+                $("#ajax-urls").append(response.url + "\n")
+                if (!response.ok) {
+                    throw new Error(`Request failed with status ${response.status}`)
+                }
+                return response.json()
+            })
+            .then(taxonomy => {
+                for (const [rank, counts] of Object.entries(taxonomy["taxonomy"])) {
+                    let span_set = []
+
+                    for (const [name, count] of Object.entries(counts).filter(tax => tax[0] != "null").sort((a, b) => b[1] - a[1])) {
+                        span_set.push(`<span>${name} [${count}]</span>`)
+                    }
+
+                    let tax_span = span_set.join("<br>")
+
+                    $(`#${rank}`).html(tax_span)
+                }
+            })
+
+        let tabular_metadata_fields = {
+            'spec_depositories': {{inst|tojson|safe}},
+            'seq_centers': {{sequence_run_site|tojson|safe}},
+            'spec_identification': {{identified_by|tojson|safe}},
+        }
+        for (const [attribution, metadata] of Object.entries(tabular_metadata_fields)) {
+            let span_set = []
+
+            for (const [name, count] of Object.entries(metadata).filter(attr => attr[0] != "null").sort((a, b) => b[1] - a[1])) {
+                span_set.push(`<span>${name} [${count}]</span>`)
+            }
+
+            let attribution_span = span_set.join("<br>")
+
+            $(`#${attribution}`).html(attribution_span)
+        }
+
+        populate_records_table()
+    }); //end Document Ready
+</script>
+
+<style>
+    #bin-tree {
+        display: none;
+    }
+
+    #publications-ibox {
+        display: none;
+    }
+
+    #debug-urls {
+        display: none;
+    }
+</style>
+{% include "includes/ancillary_data.jinja2" %}
+{% endblock %}
+{% block content %}
+<section id="features" class="container services">
+    <div class="pull-right">
+        {% if stats.sequences > DOWNLOAD_LIMIT %}
+        <a href="#" class="btn btn-lg btn-primary no-download-alert"><i class="fa fa-download"></i> JSON</a>
+        <a href="#" class="btn btn-lg btn-primary no-download-alert"><i class="fa fa-download"></i> TSV</a>
+        <a href="#" class="btn btn-lg btn-primary no-download-alert"><i class="fa fa-download"></i> DwC</a>
+        {% else %}
+        <a href="/api/documents/{{ query_id }}/download?format=json" download="{{ bin_uri }}.json" class="btn btn-lg btn-primary"><i class="fa fa-download"></i> JSON</a>
+        <a href="/api/documents/{{ query_id }}/download?format=tsv" download="{{ bin_uri }}.tsv" class="btn btn-lg btn-primary"><i class="fa fa-download"></i> TSV</a>
+        <a href="/api/documents/{{ query_id }}/download?format=dwc" download="{{ bin_uri }}.txt" class="btn btn-lg btn-primary"><i class="fa fa-download"></i> DwC</a>
+        {% endif %}
+    </div>
+    <h1 id="subtitle">{{ subtitle|e }}</h1>
+    <div class="row">
+        <div class="col-lg-7">
+            {% if image_count: %}
+            {% include "includes/image_gallery.jinja2" %}
+            {% endif %}
+            {% include "includes/coordinates_map.jinja2" %}
+            <div class="ibox">
+                <div class="ibox-content">
+                    <div class="navy-line"></div>
+                    <h1>Collection Site(s) by Country</h1>
+                    <div>
+                        <canvas id="country-bin-chart" height="140"></canvas>
+                    </div>
+                </div>
+            </div>
+            <div id="bin-tree" class="ibox">
+                <div class="ibox-content">
+                    <div class="navy-line"></div>
+                    <h1>Tree Reconstruction of BIN & Nearest Neighbor</h1>
+                    <div id="tree">
+                        <img src="/static/img/BOLD_AEY9263_tree.png" style="width:100%">
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-5">
+            <div class="ibox">
+                <div class="ibox-content">
+                    <div class="navy-line"></div>
+                    <h1>BIN Overview</h1>
+                    <table class="table table-striped">
+                        <tr>
+                            <th>BIN URI:</th>
+                            <td>{{ bin_uri|e }}</td>
+                            <th>Average Distance:</th>
+                            <td id="avg-dist"><span class="loading"></span></td>
+                        </tr>
+                        <tr>
+                            <th>DOI:</th>
+                            <td id="bin-doi"><span class="loading"></span></td>
+                            <th>Min Distance:</th>
+                            <td id="min-dist"><span class="loading"></span></td>
+                        </tr>
+                        <tr>
+                            <th>Records:</th>
+                            <td id="record-count">{{ stats.specimens|e }}</td>
+                            <th>Max Distance:</th>
+                            <td id="max-dist"><span class="loading"></span></td>
+                        </tr>
+                        <tr>
+                            <th>Records with Species:</th>
+                            <td>{{ stats.records_w_species|e }}</td>
+                            <th>Distance to Nearest Neighbour:</th>
+                            <td id="nn-dist"><span class="loading"></span></td>
+                        </tr>
+                        <tr>
+                            <th>Species:</th>
+                            <td>{{ stats.species|e }}</td>
+                            <th></th>
+                            <td></td>
+                        </tr>
+                        <tr>
+                            <th>Countries/Oceans:</th>
+                            <td>{{ stats["countries/oceans"]|e }}</td>
+                            <th></th>
+                            <td></td>
+                        </tr>
+                        <tr>
+                            <th>Institutions:</th>
+                            <td>{{ stats.institutions|e }}</td>
+                            <th></th>
+                            <td></td>
+                        </tr>
+                    </table>
+                </div>
+            </div>
+            <div class="ibox">
+                <div class="ibox-content">
+                    <div class="navy-line"></div>
+                    <h1>Taxonomy</h1>
+                    <table class="table table-striped">
+                        <tr>
+                            <th>Phylum:</th>
+                            <td id="phylum"><span class="loading"></span></td>
+                            <th>Class:</th>
+                            <td id="class"><span class="loading"></span></td>
+                        </tr>
+                        <tr>
+                            <th>Order:</th>
+                            <td id="order"><span class="loading"></span></td>
+                            <th>Family:</th>
+                            <td id="family"><span class="loading"></span></td>
+                        </tr>
+                        <tr>
+                            <th>Subfamily:</th>
+                            <td id="subfamily"><span class="loading"></span></td>
+                            <th>Tribe:</th>
+                            <td id="tribe"><span class="loading"></span></td>
+                        </tr>
+                        <tr>
+                            <th>Genus:</th>
+                            <td id="genus" colspan="3"><span class="loading"></span></td>
+                        </tr>
+                        <tr>
+                            <th>Species:</th>
+                            <td id="species" colspan="3"><span class="loading"></span></td>
+                        </tr>
+                        <tr>
+                            <th>Subspecies:</th>
+                            <td id="subspecies" colspan="3"><span class="loading"></span></td>
+                        </tr>
+                    </table>
+                </div>
+            </div>
+            <div class="ibox">
+                <div class="ibox-content">
+                    <div class="navy-line"></div>
+                    <h1>Nearest Neighbor (NN) Details</h1>
+                    <table class="table table-striped">
+                        <tr>
+                            <th>Nearest BIN URI:</th>
+                            <td id="nearest-bin-uri"><span class="loading"></span></td>
+                            <th>Average Distance:</th>
+                            <td id="nearest-avg-dist"><span class="loading"></span></td>
+                        </tr>
+                        <tr>
+                            <th>Min Distance:</th>
+                            <td id="nearest-min-dist"><span class="loading"></span></td>
+                            <th>Max Distance:</th>
+                            <td id="nearest-max-dist"><span class="loading"></span></td>
+                        </tr>
+                    </table>
+                </div>
+            </div>
+            <div class="ibox collapse" id="distance-ibox">
+                <div class="ibox-content">
+                    <div class="navy-line"></div>
+                    <h1>Distance Distribution</h1>
+                    <div>
+                        <canvas id="distance-chart" height="140"></canvas>
+                    </div>
+                </div>
+            </div>
+            <div class="ibox">
+                <div class="ibox-content">
+                    <div class="navy-line"></div>
+                    <h1>Attribution</h1>
+                    <table id="attribution" class="table table-striped">
+                        <tr><th>Specimen Depositories:</th></tr>
+                        <tr><td id="spec_depositories"><span class="loading"></span></td></tr>
+                        <tr><th>Sequencing Centers:</th></tr>
+                        <tr><td id="seq_centers"><span class="loading"></span></td></tr>
+                        <tr><th>Specimen Identification:</th></tr>
+                        <tr><td id="spec_identification"><span class="loading"></span></td></tr>
+                    </table>
+                </div>
+            </div>
+            <div id="publications-ibox" class="ibox">
+                <div class="ibox-content">
+                    <div class="navy-line"></div>
+                    <h1>Publications</h1>
+                    <div id="publications"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="row">
+        <div class="col-lg-12">
+            {% set records_title_center = True %}
+            {% set records_title = "Records (Limited to %s)" % extent_limit if extent_limit and stats.sequences > extent_limit else "Records" %}
+            {% include "includes/records_table.jinja2" %}
+        </div>
+    </div>
+    <div id="debug-urls" class="row">
+        <div class="col-lg-6">
+            <div class="ibox">
+                <div class="ibox-content">
+                    <div class="navy-line"></div>
+                    <h1>Controller URLs</h1>
+                    <pre>
+                        {%- set newline = joiner("\n") -%}
+                        {%- for url in urls: -%}
+                            {{ newline() }}{{ url | e }}
+                        {%- endfor -%}
+                    </pre>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-6">
+            <div class="ibox">
+                <div class="ibox-content">
+                    <div class="navy-line"></div>
+                    <h1>AJAX URLs</h1>
+                    <pre id="ajax-urls"></pre>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+{% endblock %}

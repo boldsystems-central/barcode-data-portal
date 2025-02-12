@@ -1,0 +1,16 @@
+{% extends "includes/base.jinja2" %}
+{% block title %}{% endblock %}
+{% block head %}
+{{ super() }}
+<script type="text/javascript">
+    $(document).ready(async function () {
+    }); //end Document Ready
+</script>
+{% include "includes/bin_searchbar.jinja2" %}
+{% endblock %}
+
+{% block content %}
+
+{% include "wp-templates/bin_home.html" %}
+
+{% endblock %}

@@ -1,0 +1,981 @@
+{% extends "includes/base.jinja2" %}
+{% set DOWNLOAD_LIMIT = 1000000 %}
+{% block title %} - {{ name|e }}{% endblock %}
+{% block head %}
+{{ super() }}
+<script type="text/javascript">
+    const MORE_ATTR_COUNT = 10
+    const PLOT_LIMIT = 10
+
+    $(document).ready(async function () {
+        $(".no-download-alert").on("click", e => {
+            e.preventDefault()
+            swal({
+                title: "Download Not Permitted",
+                text: "Number of records to download exceeds limit of {{ DOWNLOAD_LIMIT }}. Queued downloads will be available shortly.",
+                type: "warning"
+            });
+        })
+
+        let countryIso = countryLookup["{{ name }}"]
+
+        populate_coordinates_map(0, countryIso)
+        {% if image_count: %}
+        populate_image_gallery()
+        {% endif %}
+
+        let recordsWSpeciesData = {
+            labels: ["", ""],
+            datasets: [{
+                data: [{{ stats.records_w_species }}, {{ stats.specimens - stats.records_w_species }}],
+                backgroundColor: ["#87bdc5", "#d3d3d3"]
+            }]
+        }
+
+        new Chart(
+            document.getElementById("records-with-species-chart").getContext("2d"),
+            {
+                type: 'doughnut',
+                data: recordsWSpeciesData,
+                options: {
+                    responsive: false,
+                    cutoutPercentage: 55,
+                    legend: {
+                        display: false
+                    },
+                    tooltips: {
+                        filter: function (tooltipItem) {
+                            return tooltipItem.index === 0
+                        },
+                        callbacks: {
+                            label: function (tooltipItem, data) {
+                                var dataset = data.datasets[tooltipItem.datasetIndex];
+                                var total = dataset.data.reduce(function (previousValue, currentValue, currentIndex, array) {
+                                    return previousValue + currentValue;
+                                });
+                                var currentValue = dataset.data[tooltipItem.index];
+                                var percentage = Math.floor(((currentValue / total) * 100) + 0.5);
+
+                                return percentage + "%";
+                            }
+                        }
+                    }
+                },
+                plugins: [{
+                    beforeDraw: function(chart) {
+                        let width = chart.chart.width,
+                            height = chart.chart.height,
+                            ctx = chart.chart.ctx;
+
+                        ctx.restore();
+
+                        let fontSize = (height / 200).toFixed(2);
+                        ctx.font = fontSize + "em sans-serif";
+                        ctx.textBaseline = "middle";
+                        ctx.fillStyle = "black";
+
+                        let text = "Specimens"
+                        let x = Math.round((width - ctx.measureText(text).width) / 2);
+                        let y = Math.round((height / 2) - (height / 6));
+                        ctx.fillText(text, x, y);
+
+                        fontSize = (height / 100).toFixed(2);
+                        ctx.font = fontSize + "em sans-serif";
+                        ctx.textBaseline = "alphabetic";
+
+                        text = "{{ stats.specimens|e }}";
+                        x = Math.round((width - ctx.measureText(text).width) / 2);
+                        y = Math.round(height / 2);
+                        ctx.fillText(text, x, y);
+
+                        fontSize = (height / 200).toFixed(2);
+                        ctx.font = fontSize + "em sans-serif";
+                        ctx.textBaseline = "bottom";
+
+                        text = "....................";
+                        x = Math.round((width - ctx.measureText(text).width) / 2);
+                        y = Math.round((height / 2) + (height / 14));
+                        ctx.fillText(text, x, y);
+
+                        fontSize = (height / 250).toFixed(2);
+                        ctx.font = fontSize + "em sans-serif";
+                        ctx.textBaseline = "alphabetic";
+                        ctx.fillStyle = "#87bdc5";
+
+                        text = "Records with";
+                        x = Math.round((width - ctx.measureText(text).width) / 2);
+                        y = Math.round((height / 2) + (height / 7));
+                        ctx.fillText(text, x, y);
+
+                        fontSize = (height / 250).toFixed(2);
+                        ctx.font = "bold " + fontSize + "em sans-serif";
+                        ctx.textBaseline = "alphabetic";
+
+                        text = "Species";
+                        x = Math.round((width - ctx.measureText("Species (%)").width) / 2);
+                        y = Math.round((height / 2) + (height / 5));
+                        ctx.fillText(text, x, y);
+
+                        fontSize = (height / 250).toFixed(2);
+                        ctx.font = fontSize + "em sans-serif";
+                        ctx.textBaseline = "alphabetic";
+
+                        text = "(%)";
+                        x = Math.round((width - ctx.measureText("Species (%)").width) / 2 + ctx.measureText("Species ").width);
+                        y = Math.round((height / 2) + (height / 5));
+                        ctx.fillText(text, x, y);
+
+                        ctx.save();
+                    }
+                }]
+            }
+        )
+
+        let recordsWBinsData = {
+            labels: ["", ""],
+            datasets: [{
+                data: [{{ stats.records_w_bins }}, {{ stats.specimens - stats.records_w_bins }}],
+                backgroundColor: ["#efb679", "#d3d3d3"]
+            }]
+        }
+
+        new Chart(
+            document.getElementById("records-with-bins-chart").getContext("2d"),
+            {
+                type: 'doughnut',
+                data: recordsWBinsData,
+                options: {
+                    responsive: false,
+                    cutoutPercentage: 55,
+                    legend: {
+                        display: false
+                    },
+                    tooltips: {
+                        filter: function (tooltipItem) {
+                            return tooltipItem.index === 0
+                        },
+                        callbacks: {
+                            label: function(tooltipItem, data) {
+                                var dataset = data.datasets[tooltipItem.datasetIndex];
+                                var total = dataset.data.reduce(function(previousValue, currentValue, currentIndex, array) {
+                                    return previousValue + currentValue;
+                                });
+                                var currentValue = dataset.data[tooltipItem.index];
+                                var percentage = Math.floor(((currentValue/total) * 100)+0.5);
+
+                                return percentage + "%";
+                            }
+                        }
+                    }
+                },
+                plugins: [{
+                    beforeDraw: function(chart) {
+                        let width = chart.chart.width,
+                            height = chart.chart.height,
+                            ctx = chart.chart.ctx;
+
+                        ctx.restore();
+
+                        let fontSize = (height / 200).toFixed(2);
+                        ctx.font = fontSize + "em sans-serif";
+                        ctx.textBaseline = "middle";
+                        ctx.fillStyle = "black";
+
+                        let text = "Sequences"
+                        let x = Math.round((width - ctx.measureText(text).width) / 2);
+                        let y = Math.round((height / 2) - (height / 6));
+                        ctx.fillText(text, x, y);
+
+                        fontSize = (height / 100).toFixed(2);
+                        ctx.font = fontSize + "em sans-serif";
+                        ctx.textBaseline = "alphabetic";
+
+                        text = "{{ stats.sequences|e }}";
+                        x = Math.round((width - ctx.measureText(text).width) / 2);
+                        y = Math.round(height / 2);
+                        ctx.fillText(text, x, y);
+
+                        fontSize = (height / 200).toFixed(2);
+                        ctx.font = fontSize + "em sans-serif";
+                        ctx.textBaseline = "bottom";
+
+                        text = "....................";
+                        x = Math.round((width - ctx.measureText(text).width) / 2);
+                        y = Math.round((height / 2) + (height / 14));
+                        ctx.fillText(text, x, y);
+
+                        fontSize = (height / 250).toFixed(2);
+                        ctx.font = fontSize + "em sans-serif";
+                        ctx.textBaseline = "alphabetic";
+                        ctx.fillStyle = "#efb679";
+
+                        text = "Records with";
+                        x = Math.round((width - ctx.measureText(text).width) / 2);
+                        y = Math.round((height / 2) + (height / 7));
+                        ctx.fillText(text, x, y);
+
+                        fontSize = (height / 250).toFixed(2);
+                        ctx.font = "bold " + fontSize + "em sans-serif";
+                        ctx.textBaseline = "alphabetic";
+
+                        text = "BINs";
+                        x = Math.round((width - ctx.measureText("BINs (%)").width) / 2);
+                        y = Math.round((height / 2) + (height / 5));
+                        ctx.fillText(text, x, y);
+
+                        fontSize = (height / 250).toFixed(2);
+                        ctx.font = fontSize + "em sans-serif";
+                        ctx.textBaseline = "alphabetic";
+
+                        text = "(%)";
+                        x = Math.round((width - ctx.measureText("BINs (%)").width) / 2 + ctx.measureText("BINs ").width);
+                        y = Math.round((height / 2) + (height / 5));
+                        ctx.fillText(text, x, y);
+
+                        ctx.save();
+                    }
+                }]
+            }
+        )
+
+        let statsData = {
+            labels: ["Species (in records)", "BINs (in records)"],
+            datasets: [{
+                data: [{{ stats.species }}, {{ stats.bins }}],
+                backgroundColor: ["#87bdc5", "#efb679"],
+                barPercentage: [0.7, 0.7]
+            }]
+        }
+
+        new Chart(
+            document.getElementById("stats-chart").getContext("2d"),
+            {
+                plugins: [
+                    ChartDataLabels,
+                    {
+                        beforeDraw: function(chart) {
+                            let width = chart.chart.width,
+                                height = chart.chart.height,
+                                ctx = chart.chart.ctx;
+
+                            let fontSize = 13
+                            ctx.font = Chart.helpers.fontString(fontSize, "bold", Chart.defaults.global.defaultFontFamily);
+
+                            chart.data.datasets.forEach(function(dataset, i) {
+                                var meta = chart.chart.controller.getDatasetMeta(i);
+                                    meta.data.forEach(function(bar, index) {
+
+                                        var label = bar._model.label;
+                                        var xOffset = 10;
+                                        var yOffset = bar._model.y - (fontSize * 2);
+                                        ctx.fillText(label, xOffset, yOffset);
+                                    });
+                            });
+                        }
+                    }
+                ],
+                type: 'horizontalBar',
+                data: statsData,
+                options: {
+                    responsive: true,
+                    legend: {
+                        display: false
+                    },
+                    layout: {
+                        padding: {
+                            top: 16
+                        }
+                    },
+                    scales: {
+                        xAxes: [{
+                            ticks: {
+                                display: false,
+                                beginAtZero: true
+                            },
+                            gridLines: {
+                                display: false
+                            }
+                        }],
+                        yAxes: [{
+                            ticks: {
+                                display: false
+                            },
+                            gridLines: {
+                                display: false
+                            }
+                        }]
+                    },
+                    plugins: {
+                        datalabels: {
+                            anchor: 'end',
+                            align: (context) => {
+                                let largest = [...context.dataset.data].sort((a, b) => b - a)[0]
+                                let current = context.dataset.data[context.dataIndex]
+                                if (largest / current > 10) {
+                                    return 'end'
+                                } else {
+                                    return 'start'
+                                }
+                            },
+                            font: {
+                                weight: 'bold'
+                            }
+                        }
+                    }
+                }
+            }
+        )
+
+        let institutions = {{ inst|tojson|safe }}
+        let institutionsDoughnutData = {
+            labels: [],
+            datasets: [{
+                data: [],
+                backgroundColor: []
+            }]
+        }
+        let institutionsOther = 0
+        let institutionsOtherCount = 0
+        for (const [name, count] of Object.entries(institutions).filter(name => name[0] != "null").map(name => name[0].trim() === "" ? ["Unspecified", name[1]] : name).sort((a, b) => b[1] - a[1])) {
+            if (institutionsDoughnutData.datasets[0].data.length < PLOT_LIMIT) {
+                institutionsDoughnutData.labels.push(name)
+                institutionsDoughnutData.datasets[0].data.push(count)
+            } else {
+                institutionsOther += 1
+                institutionsOtherCount += count
+            }
+        }
+        if (institutionsOtherCount > 0) {
+            institutionsDoughnutData.labels.push(`${institutionsOther} Other(s)`)
+            institutionsDoughnutData.datasets[0].data.push(institutionsOtherCount)
+        }
+        for (let i = 0; i < institutionsDoughnutData.datasets[0].data.length; i++) {
+            institutionsDoughnutData.datasets[0].backgroundColor.push(`rgba(224,118,5,${Math.exp(-(0.5 * i)) + 0.05})`)
+        }
+        new Chart(
+            document.getElementById('institutions-chart').getContext("2d"),
+            {
+                plugins: [
+                    {
+                        afterDraw: function(chart) {
+                            const legendDivContainer = document.getElementById('institutions-legend');
+                            legendDivContainer.innerHTML = '';
+                            const legendDiv = document.createElement('div');
+                            legendDiv.style.display = 'flex';
+                            legendDiv.style.flexDirection = 'row';
+                            legendDiv.style.flexWrap = 'wrap';
+                            legendDiv.style.margin = '0px';
+                            legendDiv.style.padding = '0px';
+
+                            legendDivContainer.appendChild(legendDiv);
+
+                            const legendTitleDiv = document.createElement('div');
+                            legendTitleDiv.style.alignItems = 'center';
+                            legendTitleDiv.style.cursor = 'default';
+                            legendTitleDiv.style.display = 'flex';
+                            legendTitleDiv.style.flexDirection = 'row';
+                            legendTitleDiv.style.marginBottom = '4px';
+                            legendTitleDiv.style.width = '100%';
+
+                            // Text
+                            const textContainer = document.createElement('div');
+                            textContainer.style.color = '#666';
+                            textContainer.style.margin = '0px';
+                            textContainer.style.padding = '0px';
+                            textContainer.style.flex = '1';
+                            textContainer.style.textDecoration = '';
+                            textContainer.style.fontWeight = 'bold';
+
+                            const text = document.createTextNode("Specimen Depositories:");
+                            textContainer.appendChild(text);
+
+                            legendTitleDiv.appendChild(textContainer);
+                            legendDiv.appendChild(legendTitleDiv);
+
+                            const labels = chart.options.legend.labels.generateLabels(chart);
+
+                            labels.forEach((label, idx) =>
+                            {
+                                const isLast = idx == labels.length - 1;
+                                const listItemDiv = document.createElement('div');
+                                listItemDiv.style.alignItems = 'center';
+                                listItemDiv.style.cursor = 'pointer';
+                                listItemDiv.style.display = 'flex';
+                                listItemDiv.style.flexDirection = 'row';
+                                listItemDiv.style.marginBottom = !isLast ? '4px' : '0px';
+                                listItemDiv.style.width = '100%';
+
+                                listItemDiv.onclick = () =>
+                                {
+                                    for (i = 0, ilen = (chart.data.datasets || []).length; i < ilen; ++i) {
+                                        meta = chart.getDatasetMeta(i);
+                                        // toggle visibility of index if exists
+                                        if (meta.data[idx]) {
+                                            meta.data[idx].hidden = !meta.data[idx].hidden;
+                                        }
+                                    }
+                                    chart.update();
+                                };
+
+                                // Color box
+                                const boxSpan = document.createElement('div');
+                                boxSpan.style.background = label.fillStyle?.toString();
+                                boxSpan.style.borderColor = label.strokeStyle?.toString();
+                                boxSpan.style.borderWidth = `${label.lineWidth}px`;
+                                boxSpan.style.borderRadius = '50%';
+                                boxSpan.style.display = 'inline-block';
+                                boxSpan.style.height = '16px';
+                                boxSpan.style.marginRight = '6px';
+                                boxSpan.style.width = '16px';
+
+                                // Text
+                                const textContainer = document.createElement('div');
+                                textContainer.style.color = label.fontColor?.toString() || '#666';
+                                textContainer.style.margin = '0px';
+                                textContainer.style.padding = '0px';
+                                textContainer.style.flex = '1';
+                                textContainer.style.textDecoration = label.hidden ? 'line-through' : '';
+
+                                const text = document.createTextNode(label.text);
+                                textContainer.appendChild(text);
+
+                                listItemDiv.appendChild(boxSpan);
+                                listItemDiv.appendChild(textContainer);
+                                legendDiv.appendChild(listItemDiv);
+                            });
+                        }
+                    }
+                ],
+                type: 'doughnut',
+                data: institutionsDoughnutData,
+                options: {
+                    cutoutPercentage: 55,
+                    legend: {
+                        display: false
+                    },
+                    responsive: true,
+                    maintainAspectRatio: false
+                }
+            }
+        )
+
+        let sequenceRunSites = {{ sequence_run_site|tojson|safe }}
+        let sequenceRunSitesDoughnutData = {
+            labels: [],
+            datasets: [{
+                data: [],
+                backgroundColor: []
+            }]
+        }
+        let sequenceRunSitesOther = 0
+        let sequenceRunSitesOtherCount = 0
+        for (const [name, count] of Object.entries(sequenceRunSites).filter(name => name[0] != "null").map(name => name[0].trim() === "" ? ["Unspecified", name[1]] : name).sort((a, b) => b[1] - a[1])) {
+            if (sequenceRunSitesDoughnutData.datasets[0].data.length < PLOT_LIMIT) {
+                sequenceRunSitesDoughnutData.labels.push(name)
+                sequenceRunSitesDoughnutData.datasets[0].data.push(count)
+            } else {
+                sequenceRunSitesOther += 1
+                sequenceRunSitesOtherCount += count
+            }
+        }
+        if (sequenceRunSitesOtherCount > 0) {
+            sequenceRunSitesDoughnutData.labels.push(`${sequenceRunSitesOther} Other(s)`)
+            sequenceRunSitesDoughnutData.datasets[0].data.push(sequenceRunSitesOtherCount)
+        }
+        for (let i = 0; i < sequenceRunSitesDoughnutData.datasets[0].data.length; i++) {
+            sequenceRunSitesDoughnutData.datasets[0].backgroundColor.push(`rgba(10,79,89,${Math.exp(-(0.5 * i)) + 0.05})`)
+        }
+        new Chart(
+            document.getElementById('sequence-run-sites-chart').getContext("2d"),
+            {
+                plugins: [
+                    {
+                        afterDraw: function(chart) {
+                            const legendDivContainer = document.getElementById('sequence-run-sites-legend');
+                            legendDivContainer.innerHTML = '';
+                            const legendDiv = document.createElement('div');
+                            legendDiv.style.display = 'flex';
+                            legendDiv.style.flexDirection = 'row';
+                            legendDiv.style.flexWrap = 'wrap';
+                            legendDiv.style.margin = '0px';
+                            legendDiv.style.padding = '0px';
+
+                            legendDivContainer.appendChild(legendDiv);
+
+                            const legendTitleDiv = document.createElement('div');
+                            legendTitleDiv.style.alignItems = 'center';
+                            legendTitleDiv.style.cursor = 'default';
+                            legendTitleDiv.style.display = 'flex';
+                            legendTitleDiv.style.flexDirection = 'row';
+                            legendTitleDiv.style.marginBottom = '4px';
+                            legendTitleDiv.style.width = '100%';
+
+                            // Text
+                            const textContainer = document.createElement('div');
+                            textContainer.style.color = '#666';
+                            textContainer.style.margin = '0px';
+                            textContainer.style.padding = '0px';
+                            textContainer.style.flex = '1';
+                            textContainer.style.textDecoration = '';
+                            textContainer.style.fontWeight = 'bold';
+
+                            const text = document.createTextNode("Sequencing Centres:");
+                            textContainer.appendChild(text);
+
+                            legendTitleDiv.appendChild(textContainer);
+                            legendDiv.appendChild(legendTitleDiv);
+
+                            const labels = chart.options.legend.labels.generateLabels(chart);
+
+                            labels.forEach((label, idx) =>
+                            {
+                                const isLast = idx == labels.length - 1;
+                                const listItemDiv = document.createElement('div');
+                                listItemDiv.style.alignItems = 'center';
+                                listItemDiv.style.cursor = 'pointer';
+                                listItemDiv.style.display = 'flex';
+                                listItemDiv.style.flexDirection = 'row';
+                                listItemDiv.style.marginBottom = !isLast ? '4px' : '0px';
+                                listItemDiv.style.width = '100%';
+
+                                listItemDiv.onclick = () =>
+                                {
+                                    for (i = 0, ilen = (chart.data.datasets || []).length; i < ilen; ++i) {
+                                        meta = chart.getDatasetMeta(i);
+                                        // toggle visibility of index if exists
+                                        if (meta.data[idx]) {
+                                            meta.data[idx].hidden = !meta.data[idx].hidden;
+                                        }
+                                    }
+                                    chart.update();
+                                };
+
+                                // Color box
+                                const boxSpan = document.createElement('div');
+                                boxSpan.style.background = label.fillStyle?.toString();
+                                boxSpan.style.borderColor = label.strokeStyle?.toString();
+                                boxSpan.style.borderWidth = `${label.lineWidth}px`;
+                                boxSpan.style.borderRadius = '50%';
+                                boxSpan.style.display = 'inline-block';
+                                boxSpan.style.height = '16px';
+                                boxSpan.style.marginRight = '6px';
+                                boxSpan.style.width = '16px';
+
+                                // Text
+                                const textContainer = document.createElement('div');
+                                textContainer.style.color = label.fontColor?.toString() || '#666';
+                                textContainer.style.margin = '0px';
+                                textContainer.style.padding = '0px';
+                                textContainer.style.flex = '1';
+                                textContainer.style.textDecoration = label.hidden ? 'line-through' : '';
+
+                                const text = document.createTextNode(label.text);
+                                textContainer.appendChild(text);
+
+                                listItemDiv.appendChild(boxSpan);
+                                listItemDiv.appendChild(textContainer);
+                                legendDiv.appendChild(listItemDiv);
+                            });
+                        }
+                    }
+                ],
+                type: 'doughnut',
+                data: sequenceRunSitesDoughnutData,
+                options: {
+                    cutoutPercentage: 55,
+                    legend: {
+                        display: false,
+                        position: 'right',
+                        align: 'middle',
+                        labels: {
+                            usePointStyle: true
+                        }
+                    },
+                    responsive: true,
+                    maintainAspectRatio: false
+                }
+            }
+        )
+
+        let tabular_metadata_fields = {
+            'spec_identification': {{identified_by|tojson|safe}}
+        }
+        for (const [attribution, metadata] of Object.entries(tabular_metadata_fields)) {
+            let attr_count = 0
+            let span_set = []
+            let span_set_more = []
+
+            for (const [name, count] of Object.entries(metadata).filter(attr => attr[0] != "null").map(attr => attr[0].trim() === "" ? ["Unspecified", attr[1]] : attr).sort((a, b) => b[1] - a[1])) {
+                if (attr_count < MORE_ATTR_COUNT) {
+                    span_set.push(`<span>${name} [${count}]</span>`)
+                } else {
+                    span_set_more.push(`<span>${name} [${count}]</span>`)
+                }
+                attr_count ++
+            }
+
+            let attribution_span = span_set.join(", ")
+            let attribution_span_more = ""
+            if (span_set_more.length > 0) {
+                attribution_span_more = `<span id="more-attr-${attribution}" class="collapse">, ${span_set_more.join(", ")}</span>`
+                attribution_span_more += `<br><a class="navy-link more-attr-link" href="#" role="button" data-span="more-attr-${attribution}">Show More »</a>`
+            }
+
+            $(`#${attribution}`).html(attribution_span + attribution_span_more)
+            $(".more-attr-link", `#${attribution}`).on("click", e => {
+                e.preventDefault()
+
+                let attribution_span_more = $(e.target).data("span")
+                if ($(`#${attribution_span_more}`).is(":hidden")) {
+                    $(`#${attribution_span_more}`).show()
+                    $(e.target).text("Show Less «")
+                } else {
+                    $(`#${attribution_span_more}`).hide()
+                    $(e.target).text("Show More »")
+                }
+                return false
+            })
+        }
+
+        let sequenceUpload = {{ sequence_upload_date|tojson|safe }}
+        let sequenceUploadLineData = {
+                labels: [],
+                datasets: [
+                    {
+                        label: "Year-Month",
+                        backgroundColor: "rgba(74,149,195,0.5)",
+                        borderColor: "rgba(74,149,195,0.7)",
+                        pointBackgroundColor: "rgba(74,149,195,1)",
+                        pointBorderColor: "#fff",
+                        data: []
+                    }
+                ]
+            }
+        for (const [year_month, count] of Object.entries(sequenceUpload).filter(year => year[0] != "null").sort((a, b) => Date.parse(a[0]) - Date.parse(b[0]))) {
+            let year_month_date = new Date(year_month + "-15")
+            let year = year_month_date.getFullYear()
+            let month = year_month_date.toLocaleString("default", { month: "short" })
+            sequenceUploadLineData.labels.push(`${year}-${month}`)
+            sequenceUploadLineData.datasets[0].data.push(count)
+        }
+        new Chart(
+            document.getElementById("sequence-upload-chart").getContext("2d"),
+            {
+                type: "line",
+                data: sequenceUploadLineData,
+                options: {
+                    responsive: true
+                }
+            }
+        )
+
+        let collection = {{ collection_date_start|tojson|safe }}
+        let collectionLineData = {
+                labels: [],
+                datasets: [
+                    {
+                        label: "Year-Month",
+                        backgroundColor: "rgba(74,149,195,0.5)",
+                        borderColor: "rgba(74,149,195,0.7)",
+                        pointBackgroundColor: "rgba(74,149,195,1)",
+                        pointBorderColor: "#fff",
+                        data: []
+                    }
+                ]
+            }
+        for (const [year_month, count] of Object.entries(collection).filter(year => year[0] != "null").sort((a, b) => Date.parse(a[0]) - Date.parse(b[0]))) {
+            let year_month_date = new Date(year_month + "-15")
+            let year = year_month_date.getFullYear()
+            let month = year_month_date.toLocaleString("default", { month: "short" })
+            collectionLineData.labels.push(`${year}-${month}`)
+            collectionLineData.datasets[0].data.push(count)
+        }
+        new Chart(
+            document.getElementById("collection-chart").getContext("2d"),
+            {
+                type: "line",
+                data: collectionLineData,
+                options: {
+                    responsive: true
+                }
+            }
+        )
+
+        populate_taxon_treemap()
+        populate_records_table()
+    }); //end Document Ready
+</script>
+
+<style>
+    #records-with-species-chart, #records-with-bins-chart {
+        display: block;
+        margin: auto;
+    }
+
+    .stats-col {
+        padding-left: 10px;
+        padding-right: 10px;
+    }
+
+    .stats-widget {
+        padding: 10px;
+    }
+
+    .stats-widget span {
+        color: black;
+    }
+
+    .attribution-chart-legend {
+        display: flex;
+        align-items: center;
+    }
+
+    #publications-ibox {
+        display: none;
+    }
+
+    #debug-urls {
+        display: none;
+    }
+</style>
+{% endblock %}
+{% block content %}
+<section id="features" class="container services">
+    <div class="pull-right">
+        {% if stats.sequences > DOWNLOAD_LIMIT %}
+        <a href="#" class="btn btn-lg btn-primary no-download-alert"><i class="fa fa-download"></i> JSON</a>
+        <a href="#" class="btn btn-lg btn-primary no-download-alert"><i class="fa fa-download"></i> TSV</a>
+        <a href="#" class="btn btn-lg btn-primary no-download-alert"><i class="fa fa-download"></i> DwC</a>
+        {% else %}
+        <a href="/api/documents/{{ query_id }}/download?format=json" download="{{ name }}.json" class="btn btn-lg btn-primary"><i class="fa fa-download"></i> JSON</a>
+        <a href="/api/documents/{{ query_id }}/download?format=tsv" download="{{ name }}.tsv" class="btn btn-lg btn-primary"><i class="fa fa-download"></i> TSV</a>
+        <a href="/api/documents/{{ query_id }}/download?format=dwc" download="{{ name }}.txt" class="btn btn-lg btn-primary"><i class="fa fa-download"></i> DwC</a>
+        {% endif %}
+    </div>
+    <h1 id="subtitle">{{ subtitle|e }}</h1>
+    <div class="row">
+        <div class="col-lg-8">
+            {% include "includes/coordinates_map.jinja2" %}
+            {% if image_count: %}
+            {% include "includes/image_gallery.jinja2" %}
+            {% endif %}
+        </div>
+        <div class="col-lg-4">
+            <div class="ibox">
+                <div class="ibox-content">
+                    <div class="navy-line"></div>
+                    <h1>Country/Ocean Overview</h1>
+                    <div class="row text-center">
+                        <div class="col stats-col">
+                            <canvas id="records-with-species-chart" width="200" height="200"></canvas>
+                        </div>
+                        <div class="col stats-col">
+                            <canvas id="records-with-bins-chart" width="200" height="200"></canvas>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <canvas id="stats-chart" height="90"></canvas>
+                    </div>
+                    <div class="row">
+                        <div class="col stats-col">
+                            <div class="widget style1 gray-bg stats-widget">
+                                <div class="row">
+                                    <div class="col">
+                                        <span><strong>Name:</strong></span><br>
+                                        <span>{{ name|e }}</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col stats-col">
+                            <div class="widget style1 gray-bg stats-widget">
+                                <div class="row">
+                                    <div class="col">
+                                        <span><strong>Institutions:</strong></span><br>
+                                        <span>{{ stats.institutions|e }}</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col stats-col">
+                            <div class="widget style1 gray-bg stats-widget">
+                                <div class="row">
+                                    <div class="col">
+                                        <span><strong>Specimens:</strong></span><br>
+                                        <span>{{ stats.specimens|e }}</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col stats-col">
+                            <div class="widget style1 gray-bg stats-widget">
+                                <div class="row">
+                                    <div class="col">
+                                        <span><strong>Sequences:</strong></span><br>
+                                        <span>{{ stats.sequences|e }}</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col stats-col">
+                            <div class="widget style1 gray-bg stats-widget">
+                                <div class="row">
+                                    <div class="col">
+                                        <span><strong>Records with BINs:</strong></span><br>
+                                        <span>{{ stats.records_w_bins|e }}</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col stats-col">
+                            <div class="widget style1 gray-bg stats-widget">
+                                <div class="row">
+                                    <div class="col">
+                                        <span><strong>Records with Species:</strong></span><br>
+                                        <span>{{ stats.records_w_species|e }}</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col stats-col">
+                            <div class="widget style1 gray-bg stats-widget">
+                                <div class="row">
+                                    <div class="col">
+                                        <span><strong>BINs:</strong></span><br>
+                                        <span>{{ stats.bins|e }}</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col stats-col">
+                            <div class="widget style1 gray-bg stats-widget">
+                                <div class="row">
+                                    <div class="col">
+                                        <span><strong>Species:</strong></span><br>
+                                        <span>{{ stats.species|e }}</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col stats-col">
+                            <div class="widget style1 gray-bg stats-widget">
+                                <div class="row">
+                                    <div class="col">
+                                        <span><strong>Permalink:</strong></span>
+                                        <a class="navy-link" href="{{ permalink }}">{{ permalink }}</a>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="ibox">
+                <div class="ibox-content">
+                    <div class="navy-line"></div>
+                    <h1>Sequence Uploads</h1>
+                    <div>
+                        <canvas id="sequence-upload-chart" height="140"></canvas>
+                    </div>
+                </div>
+            </div>
+            <div class="ibox">
+                <div class="ibox-content">
+                    <div class="navy-line"></div>
+                    <h1>Collection Activity</h1>
+                    <div>
+                        <canvas id="collection-chart" height="140"></canvas>
+                    </div>
+                </div>
+            </div>
+            <div class="ibox">
+                <div class="ibox-content">
+                    <div class="navy-line"></div>
+                    <h1>Attribution</h1>
+                    <span><strong>Specimen Identification:</strong></span><br>
+                    <span id="spec_identification"><span class="loading"></span></span>
+                </div>
+            </div>
+            <div id="publications-ibox" class="ibox">
+                <div class="ibox-content">
+                    <div class="navy-line"></div>
+                    <h1>Publications</h1>
+                    <div id="publications"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="row">
+        <div class="col-lg-12">
+            <div class="ibox">
+                <div class="ibox-content">
+                    <div class="navy-line-center"></div>
+                    <h1 class="text-center">Attribution</h1>
+                    <div class="row">
+                        <div class="col-lg-5">
+                            <canvas id="sequence-run-sites-chart" height="400"></canvas>
+                        </div>
+                        <div class="col-lg-7 attribution-chart-legend" height="400">
+                            <div id="sequence-run-sites-legend"></div>
+                        </div>
+                    </div><br>
+                    <div class="row">
+                        <div class="col-lg-5">
+                            <canvas id="institutions-chart" height="400"></canvas>
+                        </div>
+                        <div class="col-lg-7 attribution-chart-legend" height="400">
+                            <div id="institutions-legend"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="row">
+        <div class="col-lg-12">
+            {% set taxon_treemap_title_center = True %}
+            {% include "includes/taxon_treemap.jinja2" %}
+        </div>
+    </div>
+    <div class="row">
+        <div class="col-lg-12">
+            {% set records_title_center = True %}
+            {% set records_title = "Records (Limited to %s)" % extent_limit if extent_limit and stats.sequences > extent_limit else "Records" %}
+            {% include "includes/records_table.jinja2" %}
+        </div>
+    </div>
+    <div id="debug-urls" class="row">
+        <div class="col-lg-6">
+            <div class="ibox">
+                <div class="ibox-content">
+                    <div class="navy-line"></div>
+                    <h1>Controller URLs</h1>
+                    <pre>
+                        {%- set newline = joiner("\n") -%}
+                        {%- for url in urls: -%}
+                            {{ newline() }}{{ url | e }}
+                        {%- endfor -%}
+                    </pre>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-6">
+            <div class="ibox">
+                <div class="ibox-content">
+                    <div class="navy-line"></div>
+                    <h1>AJAX URLs</h1>
+                    <pre id="ajax-urls"></pre>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+{% endblock %}

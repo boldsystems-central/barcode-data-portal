@@ -1,0 +1,115 @@
+<script type="text/javascript">
+    function populate_records_table() {
+        const resultsTable = $("#resultsTable").DataTable({
+            scrollX: true,
+            scrollY: 1250,
+            pageLength: 25,
+            processing: true,
+            scrollCollapse: true,
+            serverSide: true,
+            searching: false,
+            ordering: false,
+            ajax: "/api/documents/{{ query_id }}",
+            columns: [
+                {
+                    title: "Process ID",
+                    data: "processid"
+                },
+                {
+                    title: "Marker Code",
+                    data: null
+                },
+                {
+                    title: "Sample ID",
+                    data: "sampleid"
+                },
+                {
+                    title: "Country/Ocean",
+                    data: "country/ocean"
+                },
+                {
+                    title: "Phylum",
+                    data: "phylum"
+                },
+                {
+                    title: "Class",
+                    data: "class"
+                },
+                {
+                    title: "Order",
+                    data: "order"
+                },
+                {
+                    title: "Family",
+                    data: "family"
+                },
+                {
+                    title: "Subfamily",
+                    data: "subfamily"
+                },
+                {
+                    title: "Genus",
+                    data: "genus"
+                },
+                {
+                    title: "Species",
+                    data: "species"
+                },
+                {
+                    title: "Subspecies",
+                    data: "subspecies"
+                },
+            ],
+            columnDefs: [
+                {
+                    targets: [0],
+                    className: "highlight",
+                    render: function (data) {
+                        return '<a href="/record/' + data + '" class="navy-link">' + data + ' <i class="fa fa-link"></i></a>'
+                    }
+                },
+                {
+                    targets: [1],
+                    className: "highlight",
+                    render: function (data) {
+                        return '<a href="/record/' + data["processid"] + '#' + data["marker_code"] + '" class="navy-link">' + data["marker_code"] + ' <i class="fa fa-link"></i></a>'
+                    }
+                }
+            ]
+        })
+
+        let url_params = resultsTable.ajax.params()
+        $("#ajax-urls").append(location.protocol + '//' + location.host + resultsTable.ajax.url() + `?start=${url_params.start}&length=${url_params.length}` + "\n")
+        $("#results-div").toggleClass("sk-loading")
+    }
+</script>
+
+<style>
+    .dataTable thead tr {
+        background-color: #a9d7cd;
+    }
+
+    .dataTable td.highlight {
+        background-color: whitesmoke !important;
+    }
+</style>
+
+<div class="ibox">
+    <div id="results-div" class="ibox-content sk-loading">
+        <div class="navy-line{{ "-center" if records_title_center else "" }}"></div>
+        <h1 {{ "class=text-center" if records_title_center else "" }}>{{ records_title|e if records_title else "Records"
+            }}</h1>
+        <div class="sk-spinner sk-spinner-cube-grid">
+            <div class="sk-cube"></div>
+            <div class="sk-cube"></div>
+            <div class="sk-cube"></div>
+            <div class="sk-cube"></div>
+            <div class="sk-cube"></div>
+            <div class="sk-cube"></div>
+            <div class="sk-cube"></div>
+            <div class="sk-cube"></div>
+            <div class="sk-cube"></div>
+        </div>
+        <table id="resultsTable" class="row-border hover stripe" style="width:100%"></table>
+    </div>
+</div>

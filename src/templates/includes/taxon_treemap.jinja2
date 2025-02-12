@@ -1,0 +1,105 @@
+<script type="text/javascript">
+    function make_ahref(name, tokenString) {
+        if (!name) return name
+        else {
+            path = (tokenString) ? tokenString + "," + `"${name}"` : `"${name}"`
+            return name + " <a href='/result?query=" + path + "[tax]'>↗</a>"
+        }
+    }
+
+    function get_tokenString_from_triplets(triplets) {
+        tokenStringArray = []
+        function in_scope_map(element) {
+            return ['tax', 'geo', 'inst', 'ids', 'bin', 'recordsetcode'].includes(element)
+        }
+
+        reg_pattern = /^(?!tax).*/
+        triplets = triplets.filter(item => reg_pattern.test(item) && item.includes(":"));
+        for (let i = 0; i < triplets.length; i++) {
+            tokens = triplets[i].split(":")
+            scopeSet = Array.from(new Set(tokens)).some(in_scope_map)
+            if (scopeSet) {
+                entity_name = `"${tokens.at(-1)}"`
+                scope = tokens.at(0)
+                tokenString = `${entity_name}[${scope}]`
+                tokenStringArray.push(tokenString)
+            }
+        }
+        return tokenStringArray.join()
+    }
+
+    function populate_taxon_treemap() {
+        fetch("/api/taxonomy/{{ query_id }}/map")
+            .then(response => {
+                $("#ajax-urls").append(response.url + "\n")
+                if (!response.ok) {
+                    throw new Error(`Request failed with status ${response.status}`)
+                }
+                return response.json()
+            })
+            .then(taxonomy_obj => {
+                var taxonomy_lineage = taxonomy_obj["taxonomy_lineage"]
+                var taxonomy = taxonomy_obj["taxonomy"]
+
+                var labels = []
+                var values = []
+                var parents = []
+                Object.values(taxonomy).forEach(taxon_rank => {
+                    Object.entries(taxon_rank).forEach(([name, value]) => {
+                        if (name == "null") return
+
+                        var tokenString = get_tokenString_from_triplets({{ triplets|safe }})
+                        labels.push(make_ahref(name, tokenString))
+                        values.push(Object.values(taxonomy_lineage).includes(name) ? 0 : value)
+                        parents.push(make_ahref(taxonomy_lineage[name], tokenString) || "{{ title|e }}")
+                    })
+                })
+
+                var data = [{
+                    type: "treemap",
+                    labels: labels,
+                    values: values,
+                    parents: parents,
+                    hoverinfo: "label+percent entry+percent parent+percent root",
+                    textinfo: "label+value",
+                    outsidetextfont: { "size": 20, "color": "#1ec2a0" },
+                    textfont: { "size": 15 },
+                    marker: { "line": { "width": 1 } },
+                    pathbar: { "visible": false },
+                }]
+                var layout = {
+                    margin: {
+                        t: 10, //top margin
+                        l: 10, //left margin
+                        r: 10, //right margin
+                        b: 10 //bottom margin
+                    },
+                    height: 675,
+                    treemapcolorway: ["#1ec2a0", "#f78e1e", "#cc4945", "#011826"],
+                }
+
+                Plotly.newPlot("taxon-treemap", data, layout)
+                $("#taxon-treemap-div").toggleClass("sk-loading")
+            })
+    }
+</script>
+
+<div class="ibox">
+    <div id="taxon-treemap-div" class="ibox-content sk-loading">
+        <div class="navy-line{{ "-center" if taxon_treemap_title_center else "" }}"></div>
+        <h1 {{ "class=text-center" if taxon_treemap_title_center else "" }}>{{ taxon_treemap_title|e if
+            taxon_treemap_title else "Taxon Treemap" }}</h1>
+        <div class="sk-spinner sk-spinner-cube-grid">
+            <div class="sk-cube"></div>
+            <div class="sk-cube"></div>
+            <div class="sk-cube"></div>
+            <div class="sk-cube"></div>
+            <div class="sk-cube"></div>
+            <div class="sk-cube"></div>
+            <div class="sk-cube"></div>
+            <div class="sk-cube"></div>
+            <div class="sk-cube"></div>
+        </div>
+        <div id="taxon-treemap"></div>
+    </div>
+</div>

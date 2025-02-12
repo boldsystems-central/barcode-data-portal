@@ -1,0 +1,17 @@
+-- BUCKET: ANCILLARY
+
+DROP COLLECTION `ANCILLARY`.`_default`.`barcodeclusters` IF EXISTS;
+DROP COLLECTION `ANCILLARY`.`_default`.`datasets` IF EXISTS;
+DROP COLLECTION `ANCILLARY`.`_default`.`publications` IF EXISTS;
+DROP COLLECTION `ANCILLARY`.`_default`.`countries` IF EXISTS;
+DROP COLLECTION `ANCILLARY`.`_default`.`institutions` IF EXISTS;
+DROP COLLECTION `ANCILLARY`.`_default`.`primers` IF EXISTS;
+DROP COLLECTION `ANCILLARY`.`_default`.`taxonomies` IF EXISTS;
+
+CREATE COLLECTION `ANCILLARY`.`_default`.`barcodeclusters` IF NOT EXISTS;
+CREATE COLLECTION `ANCILLARY`.`_default`.`datasets` IF NOT EXISTS;
+CREATE COLLECTION `ANCILLARY`.`_default`.`publications` IF NOT EXISTS;
+CREATE COLLECTION `ANCILLARY`.`_default`.`countries` IF NOT EXISTS;
+CREATE COLLECTION `ANCILLARY`.`_default`.`institutions` IF NOT EXISTS;
+CREATE COLLECTION `ANCILLARY`.`_default`.`primers` IF NOT EXISTS;
+CREATE COLLECTION `ANCILLARY`.`_default`.`taxonomies` IF NOT EXISTS;

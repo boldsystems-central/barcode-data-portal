@@ -1,0 +1,46 @@
+{% extends "includes/base.jinja2" %}
+{% block title %}{% endblock %}
+{% block head %}
+{{ super() }}
+<script type="text/javascript">
+    function retrieve_general_stat(stat) {
+        return fetch(`/api/stats?stat=${stat}`)
+            .then(response => {
+                $("#ajax-urls").append(response.url + "\n")
+                if (!response.ok) {
+                    throw new Error(`Request failed with status ${response.status}`)
+                }
+                return response.json()
+            })
+    }
+
+    $(document).ready(function () {
+        retrieve_general_stat("total seqs")
+            .then(stat => {
+                $("#barcode-records .elementor-counter-number").attr("data-to-value", Math.floor(stat["total seqs"] / 100000) / 10)
+            })
+
+        retrieve_general_stat("total bins")
+            .then(stat => {
+                $("#bins .elementor-counter-number").attr("data-to-value", Math.floor(stat["total bins"] / 1000))
+            })
+
+        retrieve_general_stat("plant species")
+            .then(stat => {
+                $("#plant-species .elementor-counter-number").attr("data-to-value", Math.floor(stat["plant species"] / 1000))
+            })
+
+        Promise.all([retrieve_general_stat("fungi species"), retrieve_general_stat("other species")])
+            .then(stats => {
+                $("#fungal-and-other-species .elementor-counter-number").attr("data-to-value", Math.floor((stats[0]["fungi species"] + stats[1]["other species"]) / 1000))
+            })
+    }); //end Document Ready
+</script>
+{% include "includes/searchbar.jinja2" %}
+{% endblock %}
+
+{% block content %}
+
+{% include "wp-templates/index.html" %}
+
+{% endblock %}

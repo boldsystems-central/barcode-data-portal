@@ -1,0 +1,143 @@
+#
+# docker-compose services
+#
+# This file includes and defines all the services needed to run the application in the development environment
+#
+
+services:
+  # The application to be developed
+  fastapi-app:
+    # The name of the Docker image
+    image: ${FASTAPI_IMAGE_NAME:-fastapi-app:latest}
+    # The restart policy of the application
+    restart: unless-stopped
+    # The port that is exposed by the application in the form EXTERNAL_PORT:INTERNAL_PORT
+    ports:
+      - "8000:8000"
+    # The file where the environment variables are set
+    env_file:
+      - .env
+    # The Docker networks used by the application
+    networks:
+      - webnet
+      - backend
+    # The dependencies of the application
+    depends_on:
+      socketserver-logging:
+        condition: service_started
+      redis:
+        condition: service_started
+      couchbase:
+        condition: service_healthy
+    # The name of the running Docker container
+    container_name: fastapi-app
+
+  # The logging service used by the application
+  socketserver-logging:
+    # The name of the Docker image
+    image: ${SOCKET_IMAGE_NAME:-socketserver-logging:latest}
+    # The restart policy of the logging service
+    restart: unless-stopped
+    # The port that is exposed by the logging service in the form EXTERNAL_PORT:INTERNAL_PORT
+    ports:
+      - "9020:9020"
+    # The file where the environment variables are set
+    env_file:
+      - .env
+    # The Docker networks used by the logging service
+    networks:
+      - backend
+    volumes:
+    # The volume used by the logging service:
+      - /var/log/bold-public-portal:/var/log/bold-public-portal
+    # The name of the running Docker container
+    container_name: socketserver-logging
+
+  # The reverse proxy to access the application
+  nginx:
+    # The name of the Docker image
+    image: nginx:latest
+    # The restart policy of nginx
+    restart: unless-stopped
+    # The configuration template of nginx mounted as a volume inside the Docker container
+    volumes:
+      - ./docker/nginx/default.conf.template:/etc/nginx/templates/default.conf.template:ro
+    # The port that is exposed by nginx in the form EXTERNAL_PORT:INTERNAL_PORT
+    ports:
+      - "80:80"
+    # The file where the environment variables are set
+    env_file:
+      - .env
+    # The Docker network used by nginx
+    networks:
+      - webnet
+    # The dependencies of nginx
+    depends_on:
+      - fastapi-app
+    # The name of the running Docker container
+    container_name: nginx
+
+  # The Redis cache used by the application
+  redis:
+    # The name of the Docker image
+    image: redis:7.0-bookworm
+    # The restart policy of the cache
+    restart: unless-stopped
+    # The port that is exposed by the cache in the form EXTERNAL_PORT:INTERNAL_PORT
+    ports:
+      - "6379:6379"
+    # The Docker network used by the cache
+    networks:
+      - backend
+    # The name of the running Docker container
+    container_name: redis
+
+  # The Couchbase database used by the application
+  couchbase:
+    # The name of the Docker image
+    image: couchbase:enterprise
+    # The restart policy of the database
+    restart: unless-stopped
+    # The ports that are exposed by the database in the form EXTERNAL_PORT:INTERNAL_PORT
+    ports:
+      - "8091-8097:8091-8097"
+      - "18091-18097:18091-18097"
+      - "11207:11207"
+      - "11210:11210"
+      - "11280:11280"
+    # The command to check that the service is healthy
+    healthcheck:
+      test: curl --silent http://127.0.0.1:8091/pools > /dev/null
+      interval: 10s
+      timeout: 30s
+      retries: 3
+      start_period: 10s
+    # The file where the environment variables are set
+    env_file:
+      - .env
+    # The Docker network used by the database
+    networks:
+      - webnet
+      - backend
+    volumes:
+    # The volume used by the database:
+      - db-data:/opt/couchbase/var
+    # The initialization script:
+      - ./db_data:/db_data
+    # The entrypoint is overridden to point to the initialization script
+    entrypoint: /db_data/init.sh ${COUCHBASE_DROP_CLUSTER_ON_START:-true}
+    # The name of the running Docker container
+    container_name: couchbase
+
+# The Docker networks used by the services
+networks:
+  # Front-end network accessible from `localhost`
+  webnet:
+  # Back-end network internal to Docker containers
+  backend:
+    internal: true
+
+# Persistent volumes definition
+volumes:
+  # Persistent database data volume
+  db-data:
