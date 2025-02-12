@@ -114,7 +114,7 @@ See `CYPRESS.md`
 
 @misc{Ratnasingham2025BOLD5,
     title={BOLD5: A Comprehensive Suite of Applications to Support the Assembly, Preservation, and Application of DNA Barcode Libraries}, 
-    author={Sujeevan Ratnasingham and Jireh Agda and Catherine Wei and Josh Agda and Chris Ho and Sameer Padhye and Shweta Purushe and Spandana Chereddy and Spencer Moncton and Dana Rea and Ejhtiar Islam and Paul Hebert},
+    author={Sujeevan Ratnasingham, Jireh Agda, Catherine Wei and Josh Agda, Chris Ho, Sameer Padhye, Shweta Purushe, Spandana Chereddy, Spencer Moncton, Dana Rea, Ejhtiar Islam, Paul Hebert},
     institution={Centre for Biodiversity Genomics},
     year={2025}
 }
