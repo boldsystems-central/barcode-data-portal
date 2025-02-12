@@ -1,6 +1,14 @@
 # BOLD Public Portal
 
-## Infrastructure
+## Overview
+The Barcode of Life Data (BOLD) Portal is a web application and database designed to support the access, querying, and dissemination of DNA barcode data. DNA barcodes are standardized genetic markers used for species identification, with each record uniquely linking sequence data to specimen information, images, and provenance. Built on open-source technologies—including Couchbase, FastAPI, Redis, and Python—the application provides a scalable and high-performance infrastructure for managing barcode data. Its database follows the Barcode Core Data Model (BCDM), ensuring structured and interoperable data representation.
+
+The BOLD Portal is designed for multi-institutional deployment, enabling data mirroring and supporting data sovereignty requirements. It includes critical functionalities for monitoring and managing DNA reference libraries through National and Institutional Dashboards, facilitating real-time oversight of barcode repositories. Additionally, the system hosts published datasets, allowing users to download and integrate them into local analytical pipelines.
+
+Developed with an API-first architecture, the application provides a robust API that enables seamless extensions without modifications to the core codebase. Released under the AGPL license, the BOLD Portal promotes open access, collaboration, and interoperability within the global biodiversity informatics community.
+
+
+## Requirements
 
 - Docker
 - NGINX
@@ -75,7 +83,7 @@ python socketserver_logging.py
 
 See `CYPRESS.md`
 
-## Repository Structure
+## File Organization
 
 - `ansible`
   - Ansible playbooks and deployment
@@ -90,9 +98,9 @@ See `CYPRESS.md`
   - `docs`
     - Additional documentation
   - `ETL`
-    - Data (BCDM) extration, transformation and loading
+    - Data (BCDM) extraction, transformation, and loading
   - `services`
-    - API services; serves the application data but can also be used independently
+    - API services; serve the application data but can also be used independently
   - `static`
     - Assets for application presentation
   - `templates`
@@ -101,3 +109,13 @@ See `CYPRESS.md`
     - Miscellaneous tools for the application
   - `views`
     - Application view controllers
+
+## Citation
+
+@misc{Ratnasingham2025BOLD5,
+    title={BOLD5: A Comprehensive Suite of Applications to Support the Assembly, Preservation, and Application of DNA Barcode Libraries}, 
+    author={Sujeevan Ratnasingham and Jireh Agda and Catherine Wei and Josh Agda and Chris Ho and Sameer Padhye and Shweta Purushe and Spandana Chereddy and Spencer Moncton and Dana Rea and Ejhtiar Islam and Paul Hebert},
+    institution={Centre for Biodiversity Genomics},
+    year={2025}
+}
+
