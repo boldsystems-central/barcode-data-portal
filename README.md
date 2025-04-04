@@ -119,3 +119,13 @@ See `CYPRESS.md`
     year={2025}
 }
 
+
+## Funding Acknowledgements
+
+This project was made possible through the support of:
+
+- Canada Foundation for Innovation Major Science Iniatives Fund (MSIF)
+- Genome Canada & Ontario Genomics
+- Ontario Ministry of Colleges and Universities
+- New Frontiers in Research Fund (NFRF)-Transformation
+
